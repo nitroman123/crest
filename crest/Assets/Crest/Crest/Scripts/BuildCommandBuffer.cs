@@ -111,6 +111,12 @@ namespace Crest
 
             BuildLodData(OceanRenderer.Instance, _buf);
 
+            if (OceanRenderer.Instance.ViewCamera != null)
+            {
+                // Fixes glitching trail renderers and particles when used as ocean inputs.
+                Camera.SetupCurrent(OceanRenderer.Instance.ViewCamera);
+            }
+
             // This will execute at the beginning of the frame before the graphics queue
             Graphics.ExecuteCommandBuffer(_buf);
 
