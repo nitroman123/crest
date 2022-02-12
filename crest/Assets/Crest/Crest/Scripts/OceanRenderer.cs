@@ -185,6 +185,17 @@ namespace Crest
         [Tooltip("Whether 'Water Body' components will cull the ocean tiles. Disable if you want to use the 'Water Body' 'Material Override' feature and still have an ocean.")]
         public bool _waterBodyCulling = true;
 
+        public enum SurfaceSelfIntersectionFixMode
+        {
+            Off,
+            On,
+            Automatic,
+        }
+
+        [SerializeField]
+        [Tooltip("How Crest should handle self-intersections of the ocean surface caused by choppy waves which can cause a flipped underwater effect. Automatic will enable/disable the fix if portals/volumes are used.")]
+        SurfaceSelfIntersectionFixMode _surfaceSelfIntersectionFixMode = SurfaceSelfIntersectionFixMode.Automatic;
+
 
         [Header("Detail Params")]
 
@@ -1017,13 +1028,31 @@ namespace Crest
         {
             if (OceanMaterial != null)
             {
-                // Override isFrontFace when camera is far enough from the ocean surface to fix self intersecting waves.
+                // Override isFrontFace when camera is far enough from the ocean surface to fix self-intersecting waves.
                 // Hack - due to SV_IsFrontFace occasionally coming through as true for back faces,
                 // add a param here that forces ocean to be in underwater state. I think the root
                 // cause here might be imprecision or numerical issues at ocean tile boundaries, although
                 // i'm not sure why cracks are not visible in this case.
                 var height = ViewerHeightAboveWater;
-                OceanMaterial.SetFloat(sp_ForceUnderwater, height < -2f ? 1f : height > 2f ? -1f : 0f);
+                var value = 0f;
+
+                switch (_surfaceSelfIntersectionFixMode)
+                {
+                    case SurfaceSelfIntersectionFixMode.Off:
+                        break;
+                    case SurfaceSelfIntersectionFixMode.On:
+                        value = height < -2f ? 1f : height > 2f ? -1f : 0f;
+                        break;
+                    case SurfaceSelfIntersectionFixMode.Automatic:
+                        // Skip if UnderwaterRenderer is not full-screen (ocean will be clipped).
+                        var skip = UnderwaterRenderer.Instance != null && UnderwaterRenderer.Instance.IsActive &&
+                            UnderwaterRenderer.Instance._mode != UnderwaterRenderer.Mode.FullScreen;
+                        value = skip ? 0f : height < -2f ? 1f : height > 2f ? -1f : 0f;
+                        break;
+                }
+
+
+                OceanMaterial.SetFloat(sp_ForceUnderwater, value);
             }
 
             _cascadeParams.Flip();
@@ -1035,6 +1064,21 @@ namespace Crest
             WritePerCascadeInstanceData(_perCascadeInstanceData);
             _bufPerCascadeInstanceData.SetData(_perCascadeInstanceData.Current);
             _bufPerCascadeInstanceDataSource.SetData(_perCascadeInstanceData.Previous(1));
+        }
+
+        /// <summary>
+        /// Sets the SurfaceSelfIntersectionFixMode using a string. Only useful for UnityEvents.
+        /// </summary>
+        public void SetSurfaceSelfIntersectionFixMode(string mode)
+        {
+            if (System.Enum.TryParse<SurfaceSelfIntersectionFixMode>(mode, out var result))
+            {
+                _surfaceSelfIntersectionFixMode = result;
+            }
+            else
+            {
+                Debug.LogError($"Crest: {mode} is not a valid value");
+            }
         }
 
         void WritePerCascadeInstanceData(BufferedData<PerCascadeInstanceData[]> instanceData)
