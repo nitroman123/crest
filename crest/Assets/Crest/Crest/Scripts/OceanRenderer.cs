@@ -1051,7 +1051,6 @@ namespace Crest
                         break;
                 }
 
-
                 OceanMaterial.SetFloat(sp_ForceUnderwater, value);
             }
 
