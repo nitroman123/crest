@@ -347,8 +347,12 @@ namespace Crest
 
             GeometryUtility.CalculateFrustumPlanes(camera, frustumPlanes);
 
-            // Apply isFrontFace override from OceanRenderer.
-            oceanMaskMaterial.SetFloat(OceanRenderer.sp_ForceUnderwater, OceanRenderer.Instance.OceanMaterial.GetFloat(OceanRenderer.sp_ForceUnderwater));
+            var oceanMaterial = OceanRenderer.Instance.OceanMaterial;
+            if (oceanMaterial != null)
+            {
+                // Apply isFrontFace override from OceanRenderer.
+                oceanMaskMaterial.SetFloat(OceanRenderer.sp_ForceUnderwater, oceanMaterial.GetFloat(OceanRenderer.sp_ForceUnderwater));
+            }
 
             // Get all ocean chunks and render them using cmd buffer, but with mask shader.
             if (!debugDisableOceanMask)
