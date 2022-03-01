@@ -553,7 +553,7 @@ namespace Crest
 
             for (int i = 0; i < _wavelengths.Length; i++)
             {
-                var amp = _weight * _activeSpectrum.GetAmplitude(_wavelengths[i], _componentsPerOctave, windSpeed, out _powers[i]);
+                var amp = _activeSpectrum.GetAmplitude(_wavelengths[i], _componentsPerOctave, windSpeed, out _powers[i]);
                 _amplitudes[i] = Random.value * amp;
                 _amplitudes2[i] = Random.value * amp * _reverseWaveWeight;
             }
@@ -596,6 +596,10 @@ namespace Crest
             {
                 ampSum += _amplitudes[i] * _activeSpectrum._chopScales[i / _componentsPerOctave];
             }
+
+            // Apply weight or will cause popping due to scale change.
+            ampSum *= _weight;
+
             OceanRenderer.Instance.ReportMaxDisplacementFromShape(ampSum * _activeSpectrum._chop, ampSum, ampSum);
         }
 
@@ -616,7 +620,7 @@ namespace Crest
                 var radius = _overrideSplineSettings ? _radius : splineForWaves.Radius;
                 var subdivs = _overrideSplineSettings ? _subdivisions : splineForWaves.Subdivisions;
 
-                if (ShapeGerstnerSplineHandling.GenerateMeshFromSpline<SplinePointDataGerstner>(splineForWaves, transform, subdivs, radius, Vector2.one,
+                if (ShapeGerstnerSplineHandling.GenerateMeshFromSpline<SplinePointDataWaves>(splineForWaves, transform, subdivs, radius, Vector2.one,
                     ref _meshForDrawingWaves, out _, out _))
                 {
                     _meshForDrawingWaves.name = gameObject.name + "_mesh";
@@ -758,13 +762,13 @@ namespace Crest
 
         public bool AttachDataToSplinePoint(GameObject splinePoint)
         {
-            if (splinePoint.TryGetComponent(out SplinePointDataGerstner _))
+            if (splinePoint.TryGetComponent(out SplinePointDataWaves _))
             {
                 // Already existing, nothing to do
                 return false;
             }
 
-            splinePoint.AddComponent<SplinePointDataGerstner>();
+            splinePoint.AddComponent<SplinePointDataWaves>();
             return true;
         }
     }

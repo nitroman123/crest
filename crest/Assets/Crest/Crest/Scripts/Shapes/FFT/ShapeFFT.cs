@@ -1,6 +1,6 @@
 ﻿// Crest Ocean System
 
-// Copyright 2021 Wave Harmonic Ltd
+// This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -19,6 +19,7 @@ namespace Crest
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SCRIPTS + "Shape FFT")]
     [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "wave-conditions.html" + Internal.Constants.HELP_URL_RP)]
     public partial class ShapeFFT : MonoBehaviour, LodDataMgrAnimWaves.IShapeUpdatable
+        , ISplinePointCustomDataSetup
 #if UNITY_EDITOR
         , IReceiveSplinePointOnDrawGizmosSelectedMessages
 #endif
@@ -265,7 +266,8 @@ namespace Crest
 
         void ReportMaxDisplacement()
         {
-            OceanRenderer.Instance.ReportMaxDisplacementFromShape(_maxHorizontalDisplacement, _maxVerticalDisplacement, _maxVerticalDisplacement);
+            // Apply weight or will cause popping due to scale change.
+            OceanRenderer.Instance.ReportMaxDisplacementFromShape(_maxHorizontalDisplacement * _weight, _maxVerticalDisplacement * _weight, _maxVerticalDisplacement * _weight);
         }
 
         void InitBatches()
@@ -284,8 +286,8 @@ namespace Crest
             {
                 var radius = _overrideSplineSettings ? _radius : splineForWaves.Radius;
                 var subdivs = _overrideSplineSettings ? _subdivisions : splineForWaves.Subdivisions;
-                if (ShapeGerstnerSplineHandling.GenerateMeshFromSpline(splineForWaves, transform, subdivs, radius, Vector2.one,
-                    ref _meshForDrawingWaves, out _, out _))
+                if (ShapeGerstnerSplineHandling.GenerateMeshFromSpline<SplinePointDataWaves>(splineForWaves, transform, subdivs,
+                    radius, Vector2.one, ref _meshForDrawingWaves, out _, out _))
                 {
                     _meshForDrawingWaves.name = gameObject.name + "_mesh";
                 }
@@ -393,6 +395,18 @@ namespace Crest
             DrawMesh();
         }
 #endif
+
+        public bool AttachDataToSplinePoint(GameObject splinePoint)
+        {
+            if (splinePoint.TryGetComponent(out SplinePointDataWaves _))
+            {
+                // Already existing, nothing to do
+                return false;
+            }
+
+            splinePoint.AddComponent<SplinePointDataWaves>();
+            return true;
+        }
     }
 
 #if UNITY_EDITOR

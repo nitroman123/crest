@@ -28,6 +28,8 @@ Preview
    -  Add new CPU-based collision provider - *Baked FFT Data*.
    -  Add portals and volumes to *Underwater Renderer* (affects both underwater and ocean surface).
       See :ref:`portals-volumes` for more information.
+   -  Add *Shader API* to *Underwater Renderer* to facilate adding underwater fog to transparent objects.
+      See :ref:`underwater-shader-api` for more information.
    -  Add *Albedo Data* feature which allows layering colour onto the water surface similar to decals.
 
 Changed
@@ -35,6 +37,7 @@ Changed
 .. bullet_list::
 
    -  Add new example scene named *Examples* which contains many mini examples of different features of `Crest`.
+   -  Add new example scene named *LakesAndRivers* for adding lakes and rivers using splines.
    -  Add support for rendering in edit mode (camera preview and scene view) to *Underwater Renderer*.
       It can be enabled/disabled with the fog scene view toggle.
    -  Add *CREST_OCEAN* scripting defines symbol.
@@ -59,7 +62,20 @@ Changed
    -  *Underwater Renderer* validates *Ocean Renderer* material.
    -  Add *Debug > Draw Queries* to *Boat Probes* to draw gizmos for queries.
    -  *SphereWaterInteraction* component upgraded to produce crisp foam-generating waves without creating large displacements. :pr:`979`
-   -  Added new example scene *BoatWakes* to showcase improvements to *SphereWaterInteraction* component.
+   -  Add new example scene *BoatWakes* to showcase improvements to *SphereWaterInteraction* component.
+   -  Allow scaling FFT waves on spline (not supported previously). *SplinePointDataGerstner* has been renamed to *SplinePointDataWaves* which works for both *ShapeFFT* and *ShapeGerstner*.
+   -  Add *Surface Self-Intersection Fix Mode* (advanced option) to control how self-intersections of the ocean surface caused by intense/choppy waves are handled.
+   -  Updated all example scenes.
+
+   .. only:: hdrp
+
+      -  Unity 2021.2 users can now use the Shader Graph version of the ocean shader.
+         The generated shader is deprecated and should not be used as it does not work correctly for 2021.2. `[HDRP]`
+      -  Add support for *Ray-Traced Reflections* for Unity 2021.2. `[HDRP]`
+      -  Revert to using Unity's material inspector which gives more control and is more reliable. `[HDRP]`
+      -  Improve ocean material inspector for Unity 2021.2. `[HDRP]`
+      -  Caustics and foam textures now use the sampler defined on the texure asset.
+         If using our caustics texture, it will now use trilinear sampling instead of linear. `[HDRP]`
 
    .. only:: urp
 
@@ -96,6 +112,15 @@ Fixed
    -  Fix underwater culling when *Ocean Renderer > Viewpoint* is set and different from the camera.
    -  Fix several minor exceptions in cases where components were not set up correctly.
    -  Fix possible cases of underwater effect being inverted on self-intersecting waves when further than 2m from ocean surface.
+   -  Fix a per frame GC allocation.
+   -  Fix ocean input validation incorrectly reporting that there is no spline attached when game object is disabled.
+   -  Fix *Shape FFT* with zero weight causing visible changes or pops to the ocean surface.
+   -  Fix *Shape FFT* waves animating too quickly when two or more are in the scene with different resolutions.
+   -  Fix *Shape Gerstner* weight not updating correctly if less than one on game load.
+   -  Fix *Shape Gerstner* weight being applied twice instead of once.
+      You may need to adjust your weight if between zero and one.
+   -  Fix Unity 2021.2 script upgrade requirement.
+   -  Fix compilation error if both `HDRP` and `URP` packages are installed.
 
    .. only:: birp
 
@@ -103,6 +128,7 @@ Fixed
       -  Fix shadows flickering when *Sea Floor Depth* data is populated by preventing shadow passes from executing for *Ocean Depth Cache* camera. `[BIRP]`
       -  Fix *Underwater Renderer* using a non directional light when a transparent object is in range of light and in view of camera. `[BIRP]`
       -  Fix caustics not rendering if shadow data is disabled. `[BIRP]`
+      -  Fix *Underwater Renderer* looking washed out due to using incorrect colour space for Unity 2021.2. `[BIRP]`
 
    .. only:: birp or urp
 
@@ -120,6 +146,8 @@ Fixed
    .. only:: hdrp
 
       -  Fix motion vectors not working by exposing motion vector toggle on ocean material. `[HDRP]`
+      -  Fix foam bubbles parallax effect using the incorrect normal space. `[HDRP]`
+      -  Fix foam bubbles texture scaling. `[HDRP]`
 
 Performance
 ^^^^^^^^^^^

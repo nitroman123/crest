@@ -1,6 +1,6 @@
 ﻿// Crest Ocean System
 
-// Copyright 2021 Wave Harmonic Ltd
+// This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
 // Inspired by https://github.com/speps/GX-EncinoWaves
 
@@ -362,6 +362,9 @@ namespace Crest
         /// </summary>
         void UpdateSpectrum(CommandBuffer buf, float time)
         {
+            // Always set _Size as the compute shader returned from Resource.Load is the same asset every time and more
+            // than one ShapeFFT will overwrite this value.
+            buf.SetComputeIntParam(_shaderSpectrum, "_Size", _resolution);
             buf.SetComputeFloatParam(_shaderSpectrum, "_Time", time * _spectrum._gravityScale);
             buf.SetComputeFloatParam(_shaderSpectrum, "_Chop", _spectrum._chop);
             buf.SetComputeFloatParam(_shaderSpectrum, "_Period", _loopPeriod);
