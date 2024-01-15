@@ -2,6 +2,13 @@
 
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
+namespace Crest.CrestEditor { }
+namespace Crest.EditorHelpers { }
+namespace UnityEditor.EditorTools { }
+namespace UnityEngine.InputSystem { }
+namespace UnityEngine.Rendering.HighDefinition { }
+namespace UnityEngine.Rendering.Universal { }
+
 namespace Crest.Internal
 {
     public static class Constants
@@ -20,10 +27,13 @@ namespace Crest.Internal
         // For example, if 4.9 was just released, so we change HELP_URL_VERSION from 4.9 to 4.10. If a user is using
         // master, then they will be redirected from crest.readthedocs.io/en/4.10 to crest.readthedocs.io/en/latest when
         // they land on the 404 page.
-        public const string HELP_URL_VERSION = "4.15";
-        public const string HELP_URL_RP = "?rp=birp";
+        public const string HELP_URL_VERSION = "4.19";
         public const string HELP_URL_BASE = "https://crest.readthedocs.io/en/" + HELP_URL_VERSION + "/";
         public const string HELP_URL_BASE_USER = HELP_URL_BASE + "user/";
         public const string HELP_URL_GENERAL = HELP_URL_BASE + HELP_URL_RP;
+
+        public const string HELP_URL_RP = "?rp=birp";
+
+        public const string k_NoPrefabModeSupportWarning = "Crest does not support prefab mode. Changes made in prefab mode will not be reflected in the scene view. Save this prefab to see changes.";
     }
 }

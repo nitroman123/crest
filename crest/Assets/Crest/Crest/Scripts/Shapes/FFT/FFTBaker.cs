@@ -22,6 +22,14 @@ namespace Crest
     {
         static string s_bakeFolder = null;
 
+        public static class ShaderIDs
+        {
+            public static readonly int s_BakeTime = Shader.PropertyToID("_BakeTime");
+            public static readonly int s_MinSlice = Shader.PropertyToID("_MinSlice");
+            public static readonly int s_InFFTWaves = Shader.PropertyToID("_InFFTWaves");
+            public static readonly int s_OutDisplacements = Shader.PropertyToID("_OutDisplacements");
+        }
+
         /// <summary>
         /// Bakes FFT data for a ShapeFFT component
         /// </summary>
@@ -72,10 +80,12 @@ namespace Crest
             var kernel = waveCombineShader.FindKernel("FFTBakeMultiRes");
 
             var bakedWaves = new RenderTexture(fftWaves._resolution, fftWaves._resolution * lodCount, 1, RenderTextureFormat.ARGBFloat, 0);
+            bakedWaves.name = "CrestFFTBakedWaves";
             bakedWaves.enableRandomWrite = true;
             bakedWaves.Create();
 
             var stagingTexture = new Texture2D(fftWaves._resolution, fftWaves._resolution * lodCount, TextureFormat.RGBAHalf, false, true);
+            stagingTexture.name = "CrestFFTBakedStaging";
 
             var frameCount = (int)(resolutionTime * loopPeriod);
             var frames = new half[frameCount][];
@@ -88,14 +98,14 @@ namespace Crest
 
                 // Generate multi-res FFT into a texture array
                 var fftWaveDataTA = FFTCompute.GenerateDisplacements(buf, fftWaves._resolution, loopPeriod,
-                    fftWaves._windTurbulence, fftWaves.WindDirRadForFFT, fftWaves.WindSpeedForFFT, t,
+                    fftWaves._windTurbulence, fftWaves.WindDirRadForFFT, fftWaves.WindSpeed, t,
                     fftWaves._spectrum, true);
 
                 // Compute shader generates the final waves
-                buf.SetComputeFloatParam(waveCombineShader, "_BakeTime", t);
-                buf.SetComputeIntParam(waveCombineShader, "_MinSlice", firstLod);
-                buf.SetComputeTextureParam(waveCombineShader, kernel, "_InFFTWaves", fftWaveDataTA);
-                buf.SetComputeTextureParam(waveCombineShader, kernel, "_OutDisplacements", bakedWaves);
+                buf.SetComputeFloatParam(waveCombineShader, ShaderIDs.s_BakeTime, t);
+                buf.SetComputeIntParam(waveCombineShader, ShaderIDs.s_MinSlice, firstLod);
+                buf.SetComputeTextureParam(waveCombineShader, kernel, ShaderIDs.s_InFFTWaves, fftWaveDataTA);
+                buf.SetComputeTextureParam(waveCombineShader, kernel, ShaderIDs.s_OutDisplacements, bakedWaves);
                 buf.DispatchCompute(waveCombineShader, kernel, bakedWaves.width / 8, bakedWaves.height / 8, 1);
 
                 Graphics.ExecuteCommandBuffer(buf);
@@ -118,6 +128,10 @@ namespace Crest
                 frames[timeIndex] = stagingTexture.GetRawTextureData<half>().ToArray();
             }
 
+            bakedWaves.Release();
+            Helpers.Destroy(bakedWaves);
+            Helpers.Destroy(stagingTexture);
+
             var framesFlattened = frames.SelectMany(x => x).ToArray();
             //Debug.Log($"Crest: Width: {fftWaves._resolution}, frame count: {frameCount}, slices: {lodCount}, floats per frame: {frames[0].Length}, total floats: {framesFlattened.Length}");
 
@@ -128,7 +142,7 @@ namespace Crest
                 fftWaves._resolution,
                 firstLod,
                 lodCount,
-                fftWaves.WindSpeedForFFT,
+                fftWaves.WindSpeed,
                 frames.Length,
                 new half(framesAsFloats.Min()),
                 new half(framesAsFloats.Max()),

@@ -21,7 +21,14 @@ namespace Crest
         int _version = 0;
 #pragma warning restore 414
 
-        public const string k_HelpURL = Internal.Constants.HELP_URL_BASE_USER + "ocean-simulation.html" + Internal.Constants.HELP_URL_RP + "#animated-waves-settings";
+        public const string k_HelpURL = Internal.Constants.HELP_URL_BASE_USER + "waves.html" + Internal.Constants.HELP_URL_RP + "#animated-waves-settings";
+
+        [Tooltip("PREVIEW: Set this to 2 to improve wave quality. In some cases like flowing rivers this can make a substantial difference to visual stability."
+            + "\n\nWe recommend doubling the Lod Data Resolution on the OceanRenderer component to preserve detail after making this change, but note that this will "
+            + "consume 4x more video memory until we are able to optimise data usage further, so apply this change with caution.")]
+        [SerializeField, Range(1f, 4f)]
+        float _waveResolutionMultiplier = 1f;
+        public float WaveResolutionMultiplier => Mathf.Max(1f, _waveResolutionMultiplier);
 
         [Tooltip("How much waves are dampened in shallow water."), SerializeField, Range(0f, 1f)]
         float _attenuationInShallows = 0.95f;
@@ -82,7 +89,7 @@ namespace Crest
                     result = new CollProviderNull();
                     break;
                 case CollisionSources.GerstnerWavesCPU:
-                    result = FindObjectOfType<ShapeGerstnerBatched>();
+                    result = FindFirstObjectByType<ShapeGerstnerBatched>();
                     break;
                 case CollisionSources.ComputeShaderQueries:
                     if (!OceanRenderer.RunningWithoutGPU)
@@ -131,7 +138,7 @@ namespace Crest
         {
             var isValid = base.Validate(ocean, showMessage);
 
-            if (_collisionSource == CollisionSources.GerstnerWavesCPU && showMessage != ValidatedHelper.DebugLog)
+            if (_collisionSource == CollisionSources.GerstnerWavesCPU)
             {
                 showMessage
                 (

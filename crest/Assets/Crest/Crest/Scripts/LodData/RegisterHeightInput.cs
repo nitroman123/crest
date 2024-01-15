@@ -9,9 +9,8 @@ namespace Crest
     /// <summary>
     /// Registers a custom input to affect the water height.
     /// </summary>
-    [ExecuteAlways]
     [AddComponentMenu(MENU_PREFIX + "Height Input")]
-    public partial class RegisterHeightInput : RegisterLodDataInputWithSplineSupport<LodDataMgrSeaFloorDepth>
+    public partial class RegisterHeightInput : RegisterLodDataInputWithSplineSupport<LodDataMgrSeaFloorDepth>, IReportsHeight
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -36,46 +35,113 @@ namespace Crest
 
         protected override bool FollowHorizontalMotion => true;
 
-        [Header("Height Input Settings")]
-        [SerializeField, Tooltip("Inform ocean how much this input will displace the ocean surface vertically. This is used to set bounding box heights for the ocean tiles.")]
-        float _maxDisplacementVertical = 0f;
+        // Debug
+        [Space(10)]
 
-        protected override void Update()
+        [SerializeField]
+        DebugFields _debug = new DebugFields();
+
+        [System.Serializable]
+        class DebugFields
         {
-            base.Update();
+            public bool _drawBounds;
+        }
 
-            if (OceanRenderer.Instance == null)
+
+        Rect _rect;
+
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+
+            OceanChunkRenderer.HeightReporters.Add(this);
+        }
+
+        protected override void OnDisable()
+        {
+            base.OnDisable();
+
+            OceanChunkRenderer.HeightReporters.Remove(this);
+        }
+
+        public bool ReportHeight(ref Rect bounds, ref float minimum, ref float maximum)
+        {
+            if (!Enabled)
             {
-                return;
+                return false;
             }
 
-            var maxDispVert = _maxDisplacementVertical;
-
-            // let ocean system know how far from the sea level this shape may displace the surface
             if (_renderer != null)
             {
-                var minY = _renderer.bounds.min.y;
-                var maxY = _renderer.bounds.max.y;
-                var seaLevel = OceanRenderer.Instance.SeaLevel;
-                maxDispVert = Mathf.Max(maxDispVert, Mathf.Abs(seaLevel - minY), Mathf.Abs(seaLevel - maxY));
+                _rect = new Rect(0, 0, _renderer.bounds.size.x, _renderer.bounds.size.z)
+                {
+                    center = new Vector2(_renderer.bounds.center.x, _renderer.bounds.center.z),
+                };
+
+                if (bounds.Overlaps(_rect, false))
+                {
+                    minimum = _renderer.bounds.min.y;
+                    maximum = _renderer.bounds.max.y;
+                    return true;
+                }
             }
-            else if (_splineMaterial != null &&
-                ShapeGerstnerSplineHandling.MinMaxHeightValid(_splinePointHeightMin, _splinePointHeightMax))
+            else if (_splineMaterial != null && ShapeGerstnerSplineHandling.MinMaxHeightValid(_splinePointHeightMin, _splinePointHeightMax))
             {
-                var seaLevel = OceanRenderer.Instance.SeaLevel;
-                maxDispVert = Mathf.Max(maxDispVert,
-                    Mathf.Abs(seaLevel - _splinePointHeightMin), Mathf.Abs(seaLevel - _splinePointHeightMax));
+                var splineBounds = GeometryUtility.CalculateBounds(_splineBoundingPoints, transform.localToWorldMatrix);
+                _rect = Rect.MinMaxRect(splineBounds.min.x, splineBounds.min.z, splineBounds.max.x, splineBounds.max.z);
+
+                if (bounds.Overlaps(_rect, false))
+                {
+                    minimum = _splinePointHeightMin;
+                    maximum = _splinePointHeightMax;
+                    return true;
+                }
             }
 
-            if (maxDispVert > 0f)
+            return false;
+        }
+
+        public void OnDrawGizmos()
+        {
+            if (_debug._drawBounds)
             {
-                OceanRenderer.Instance.ReportMaxDisplacementFromShape(0f, maxDispVert, 0f);
+                var ocean = OceanRenderer.Instance;
+                if (ocean != null && _rect != null)
+                {
+                    Gizmos.DrawWireCube
+                    (
+                        new Vector3(_rect.center.x, ocean.SeaLevel, _rect.center.y),
+                        new Vector3(_rect.size.x, 0, _rect.size.y)
+                    );
+                }
             }
         }
 
 #if UNITY_EDITOR
-        // Animated waves are always enabled
-        protected override bool FeatureEnabled(OceanRenderer ocean) => true;
+        public override bool Validate(OceanRenderer ocean, ValidatedHelper.ShowMessage showMessage)
+        {
+            var isValid = base.Validate(ocean, showMessage);
+
+            if (ocean != null && FeatureEnabled(ocean) && !ocean._lodDataSeaDepths.Settings._allowVaryingWaterLevel)
+            {
+                // NOTE: This is enabled by default so we will never trigger it for the default settings asset.
+                showMessage
+                (
+                    $"<i>Allow Varing Water Level</i> must be enabled on the <i>Sim Settings Sea Floor Depth</i> asset.",
+                    $"Enable the <i>Allow Varing Water Level</i> option on the <i>Sim Settings Sea Floor Depth</i> asset.",
+                    ValidatedHelper.MessageType.Error, ocean._lodDataSeaDepths.Settings,
+                    (so) => so.FindProperty(nameof(SimSettingsSeaFloorDepth._allowVaryingWaterLevel)).boolValue = true
+                );
+
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
+        protected override string FeatureToggleName => LodDataMgrSeaFloorDepth.FEATURE_TOGGLE_NAME;
+        protected override string FeatureToggleLabel => LodDataMgrSeaFloorDepth.FEATURE_TOGGLE_LABEL;
+        protected override bool FeatureEnabled(OceanRenderer ocean) => ocean.CreateSeaFloorDepthData;
 #endif // UNITY_EDITOR
     }
 }

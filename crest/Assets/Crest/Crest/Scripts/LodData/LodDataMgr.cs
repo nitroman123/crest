@@ -9,6 +9,10 @@ using UnityEngine.Rendering;
 
 namespace Crest
 {
+#if !UNITY_2023_2_OR_NEWER
+    using GraphicsFormatUsage = UnityEngine.Experimental.Rendering.FormatUsage;
+#endif
+
     /// <summary>
     /// Circular buffer to store a multiple sets of data
     /// </summary>
@@ -154,7 +158,7 @@ namespace Crest
         protected virtual void InitData()
         {
             // Find a compatible texture format.
-            var formatUsage = NeedToReadWriteTextureData ? FormatUsage.LoadStore : FormatUsage.Sample;
+            var formatUsage = NeedToReadWriteTextureData ? GraphicsFormatUsage.LoadStore : GraphicsFormatUsage.Sample;
             CompatibleTextureFormat = SystemInfo.GetCompatibleFormat(RequestedTextureFormat, formatUsage);
             if (CompatibleTextureFormat != RequestedTextureFormat)
             {
@@ -210,10 +214,10 @@ namespace Crest
 
         public interface IDrawFilter
         {
-            float Filter(ILodDataInput data, out int isTransition);
+            float Filter(ILodDataInput data, out int isTransition, out float alpha);
         }
 
-        protected void SubmitDraws(int lodIdx, CommandBuffer buf)
+        protected virtual void SubmitDraws(int lodIdx, CommandBuffer buf)
         {
             var lt = OceanRenderer.Instance._lodTransform;
             lt._renderData[lodIdx].Current.Validate(0, SimName);
@@ -247,10 +251,10 @@ namespace Crest
                     continue;
                 }
 
-                float weight = filter.Filter(draw.Value, out var isTransition);
-                if (weight > 0f)
+                var weight = filter.Filter(draw.Value, out var isTransition, out var alpha);
+                if ((weight > 0f && alpha > 0f) || (draw.Value.IgnoreTransitionWeight && weight > 0f))
                 {
-                    draw.Value.Draw(this, buf, weight, isTransition, lodIdx);
+                    draw.Value.Draw(this, buf, weight * alpha, isTransition, lodIdx);
                 }
             }
         }
@@ -278,6 +282,25 @@ namespace Crest
         {
             // Unbind from all graphics shaders (not compute)
             Shader.SetGlobalTexture(GetParamIdSampler(), NullTexture);
+
+            // Release resources and destroy object to avoid reference leak.
+            _targets.RunLambda(x =>
+            {
+                x.Release();
+                Helpers.Destroy(x);
+            });
+
+            Helpers.Destroy(_defaultSettings);
+        }
+
+        internal virtual void Enable()
+        {
+
+        }
+
+        internal virtual void Disable()
+        {
+
         }
     }
 }

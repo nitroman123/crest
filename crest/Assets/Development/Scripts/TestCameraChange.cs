@@ -2,11 +2,13 @@
 
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
+#if CREST_UNITY_INPUT && ENABLE_INPUT_SYSTEM
+#define INPUT_SYSTEM_ENABLED
+#endif
+
 using System.Collections.Generic;
 using UnityEngine;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-#endif
 using UnityEngine.SceneManagement;
 
 namespace Crest
@@ -46,7 +48,7 @@ namespace Crest
                 return;
             }
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM_ENABLED
             if (Keyboard.current.cKey.wasReleasedThisFrame)
 #else
             if (Input.GetKeyUp(KeyCode.C))

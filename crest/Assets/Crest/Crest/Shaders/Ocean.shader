@@ -69,6 +69,8 @@ Shader "Crest/Ocean"
 		[Toggle] _PlanarReflections("Planar Reflections", Float) = 0
 		// How much the water normal affects the planar reflection
 		_PlanarReflectionNormalsStrength("Planar Reflections Distortion", Float) = 1
+		// Multiplier to adjust the strength of the distortion at a distance.
+		_PlanarReflectionDistanceFactor("Planar Reflections Distortion Distance Factor", Range(0.0, 1.0)) = 0.0
 		// Multiplier to adjust how intense the reflection is
 		_PlanarReflectionIntensity("Planar Reflection Intensity", Range(0.0, 1.0)) = 1.0
 		// Whether to use an overridden reflection cubemap (provided in the next property)
@@ -202,9 +204,6 @@ Shader "Crest/Ocean"
 	{
 		Tags
 		{
-			// Tell Unity we're going to render water in forward manner and we're going to do lighting and it will set
-			// the appropriate uniforms.
-			"LightMode"="ForwardBase"
 			// Unity treats anything after Geometry+500 as transparent, and will render it in a forward manner and copy
 			// out the gbuffer data and do post processing before running it. Discussion of this in issue #53.
 			"Queue"="Geometry+510"
@@ -222,6 +221,13 @@ Shader "Crest/Ocean"
 		{
 			// Culling user defined - can be inverted for under water
 			Cull [_CullMode]
+
+			Tags
+			{
+				// Tell Unity we're going to render water in forward manner and we're going to do lighting and it will set
+				// the appropriate uniforms.
+				"LightMode"="ForwardBase"
+			}
 
 			CGPROGRAM
 			#pragma vertex Vert
@@ -256,8 +262,7 @@ Shader "Crest/Ocean"
 
 			#pragma shader_feature_local _DEBUGDISABLESHAPETEXTURES_ON
 			#pragma shader_feature_local _DEBUGDISABLESMOOTHLOD_ON
-			#pragma shader_feature_local _DEBUGVISUALISE_NONE _DEBUGVISUALISE_SHAPESAMPLE _DEBUGVISUALISE_ANIMATEDWAVES \
-				_DEBUGVISUALISE_FLOW _DEBUGVISUALISE_SHADOWS _DEBUGVISUALISE_FOAM
+			#pragma shader_feature_local _DEBUGVISUALISE_NONE _DEBUGVISUALISE_SHAPESAMPLE _DEBUGVISUALISE_ANIMATEDWAVES _DEBUGVISUALISE_FLOW _DEBUGVISUALISE_SHADOWS _DEBUGVISUALISE_FOAM
 
 			#pragma multi_compile _ CREST_UNDERWATER_BEFORE_TRANSPARENT
 
@@ -465,22 +470,34 @@ Shader "Crest/Ocean"
 					half clipValue = 0.0;
 
 					uint slice0; uint slice1; float alpha;
-					PosToSliceIndices(input.worldPos.xz, 0.0, _CrestCascadeData[0]._scale, slice0, slice1, alpha);
+					// Do not include transition slice to avoid blending as we do a black border instead.
+					PosToSliceIndices(input.worldPos.xz, 0, _SliceCount - 1.0, _CrestCascadeData[0]._scale, slice0, slice1, alpha);
 
 					const CascadeParams cascadeData0 = _CrestCascadeData[slice0];
 					const CascadeParams cascadeData1 = _CrestCascadeData[slice1];
 					const float weight0 = (1.0 - alpha) * cascadeData0._weight;
 					const float weight1 = (1.0 - weight0) * cascadeData1._weight;
 
+					bool clear = false;
 					if (weight0 > 0.001)
 					{
 						const float3 uv = WorldToUV(input.worldPos.xz, cascadeData0, slice0);
 						SampleClip(_LD_TexArray_ClipSurface, uv, weight0, clipValue);
+
+						if ((float)_LD_SliceIndex == _SliceCount - 1.0 && IsOutsideOfUV(uv.xy, cascadeData0._oneOverTextureRes))
+						{
+							clear = true;
+						}
 					}
 					if (weight1 > 0.001)
 					{
 						const float3 uv = WorldToUV(input.worldPos.xz, cascadeData1, slice1);
 						SampleClip(_LD_TexArray_ClipSurface, uv, weight1, clipValue);
+					}
+
+					if (clear)
+					{
+						clipValue = _CrestClipByDefault;
 					}
 
 					clipValue = lerp(_CrestClipByDefault, clipValue, weight0 + weight1);
@@ -744,6 +761,26 @@ Shader "Crest/Ocean"
 				return half4(col, 1.);
 			}
 
+			ENDCG
+		}
+
+		Pass
+		{
+			Name "SceneSelectionPass"
+			Tags { "LightMode" = "SceneSelectionPass" }
+
+			CGPROGRAM
+			#pragma vertex Vert
+			#pragma fragment Frag
+			// for VFACE
+			#pragma target 3.0
+
+			#include "UnityCG.cginc"
+
+			#include "Helpers/BIRP/Core.hlsl"
+			#include "Helpers/BIRP/InputsDriven.hlsl"
+
+			#include "Underwater/UnderwaterMaskShared.hlsl"
 			ENDCG
 		}
 	}

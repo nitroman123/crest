@@ -27,44 +27,60 @@ It is also highly flexible and allows any custom input to the water shape/foam/d
       .. include:: /includes/_urp-vars.rst
       .. include:: includes/_documentation-stanza.rst
 
+
+Assets
+------
+
+You can find `Crest` on the *Unity Asset Store* for all render pipelines.
+
 .. only:: html
 
-   Assets
-   ------
+   .. grid:: 3
+      :gutter: 1
+      :margin: 0
+      :padding: 0
 
-   .. panels::
-      :header: text-center
+      .. grid-item-card:: Crest Ocean System
+         :link: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-252194?aid=1011lic2K
+         :img-top: https://assetstorev1-prd-cdn.unity3d.com/key-image/fef53e24-736f-41f9-98de-bfbcdef4a4a8.jpg
+         :text-align: center
 
-      ---
-      :img-top: https://assetstorev1-prd-cdn.unity3d.com/key-image/ae4a1e07-c6f1-4b2e-b1c3-9f2065d43515.jpg
+         .. button-link:: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-252194?aid=1011lic2K
+            :color: primary
+            :expand:
+            :outline:
 
-      Crest Ocean System URP
-      ^^^^^^^^^^^^^^^^^^^^^^
+            Asset Store
 
-      .. link-button:: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-urp-141674?aid=1011lic2K
-         :type: url
-         :text: Asset Store
-         :classes: btn-outline-primary btn-block stretched-link
+      .. grid-item-card:: Crest Ocean System HDRP
+         :link: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-hdrp-164158?aid=1011lic2K
+         :img-top: https://assetstorev1-prd-cdn.unity3d.com/key-image/1e89a1d1-6cae-4163-b3f9-ead226f53160.jpg
+         :text-align: center
 
-      ---
-      :img-top: https://assetstorev1-prd-cdn.unity3d.com/key-image/68d1442e-488d-4ae9-8ec4-a7e3ff913788.jpg
+         .. button-link:: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-hdrp-164158?aid=1011lic2K
+            :color: primary
+            :expand:
+            :outline:
 
-      Crest Ocean System HDRP
-      ^^^^^^^^^^^^^^^^^^^^^^^
+            Asset Store
 
-      .. link-button:: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-hdrp-164158?aid=1011lic2K
-         :type: url
-         :text: Asset Store
-         :classes: btn-outline-primary btn-block stretched-link
+      .. grid-item-card:: Crest Ocean System URP
+         :link: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-urp-141674?aid=1011lic2K
+         :img-top: https://assetstorev1-prd-cdn.unity3d.com/key-image/2b640420-1fed-4a76-a54e-e86b9693c2bb.jpg
+         :text-align: center
 
-   .. raw:: html
+         .. button-link:: https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-urp-141674?aid=1011lic2K
+            :color: primary
+            :expand:
+            :outline:
 
-      <br>
+            Asset Store
 
-      <iframe class="asset-store" src="https://assetstore.unity.com/linkmaker/embed/package/164158/widget-wide-light?aid=1011lic2K" style="width:600px; height:130px; border:0px;"></iframe>
+.. only:: latex
 
-      <iframe class="asset-store" src="https://assetstore.unity.com/linkmaker/embed/package/141674/widget-wide-light?aid=1011lic2K" style="width:600px; height:130px; border:0px;"></iframe>
-
+   *  Crest Ocean System: :link:`Asset Store <https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-252194?aid=1011lic2K>`
+   *  Crest Ocean System HDRP: :link:`Asset Store <https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-hdrp-164158?aid=1011lic2K>`
+   *  Crest Ocean System URP: :link:`Asset Store <https://assetstore.unity.com/packages/tools/particles-effects/crest-ocean-system-urp-141674?aid=1011lic2K>`
 
 Sponsorship
 -----------
@@ -81,9 +97,9 @@ Social
 
 .. TODO: Add social icons? Wait for https://github.com/fraoustin/sphinx_fontawesome/issues/7
 
-* **YouTube** `<https://www.youtube.com/channel/UC7_ZKKCXZmH64rRZqe-C0WA>`_
+* **YouTube** `<https://www.youtube.com/@WaveHarmonic>`_
 * **Twitter** `<https://twitter.com/@crest_ocean>`_
-* **Discord** `<https://discord.gg/g7GpjDC>`_
+* **Discord** `<https://discord.gg/JJjx9qcq83>`_
 
 .. raw:: html
 

@@ -4,11 +4,13 @@
 
 // Shout out to @holdingjason who posted a first version of this script here: https://github.com/huwb/crest-oceanrender/pull/100
 
+#if CREST_UNITY_INPUT && ENABLE_INPUT_SYSTEM
+#define INPUT_SYSTEM_ENABLED
+#endif
+
 using System;
 using UnityEngine;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-#endif
 using UnityEngine.Serialization;
 
 namespace Crest
@@ -40,6 +42,8 @@ namespace Crest
         public float _minSpatialLength = 12f;
         [Range(0, 1)]
         public float _turningHeel = 0.35f;
+        [Tooltip("Clamps the buoyancy force to this value. Useful for handling fully submerged objects. Enter 'Infinity' to disable.")]
+        public float _maximumBuoyancyForce = Mathf.Infinity;
 
         [Header("Drag")]
         public float _dragInWaterUp = 3f;
@@ -182,17 +186,17 @@ namespace Crest
 
             var forward = _engineBias;
             if (_playerControlled) forward +=
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM_ENABLED
                 !Application.isFocused ? 0 :
                 ((Keyboard.current.wKey.isPressed ? 1 : 0) + (Keyboard.current.sKey.isPressed ? -1 : 0));
 #else
                 Input.GetAxis("Vertical");
 #endif
-            _rb.AddForceAtPosition(transform.forward * _enginePower * forward, forcePosition, ForceMode.Acceleration);
+            _rb.AddForceAtPosition(_enginePower * forward * transform.forward, forcePosition, ForceMode.Acceleration);
 
             var sideways = _turnBias;
             if (_playerControlled) sideways +=
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM_ENABLED
                 !Application.isFocused ? 0 :
                 ((Keyboard.current.aKey.isPressed ? -1f : 0f) +
                 (Keyboard.current.dKey.isPressed ? 1f : 0f));
@@ -201,7 +205,7 @@ namespace Crest
                 (Input.GetKey(KeyCode.D) ? 1f : 0f);
 #endif
             var rotVec = transform.up + _turningHeel * transform.forward;
-            _rb.AddTorque(rotVec * _turnPower * sideways, ForceMode.Acceleration);
+            _rb.AddTorque(_turnPower * sideways * rotVec, ForceMode.Acceleration);
         }
 
         void FixedUpdateBuoyancy()
@@ -214,7 +218,12 @@ namespace Crest
                 var heightDiff = waterHeight - _queryPoints[i].y;
                 if (heightDiff > 0)
                 {
-                    _rb.AddForceAtPosition(archimedesForceMagnitude * heightDiff * Vector3.up * _forcePoints[i]._weight * _forceMultiplier / _totalWeight, _queryPoints[i]);
+                    var force = _forceMultiplier * _forcePoints[i]._weight * archimedesForceMagnitude * heightDiff * Vector3.up / _totalWeight;
+                    if (_maximumBuoyancyForce < Mathf.Infinity)
+                    {
+                        force = Vector3.ClampMagnitude(force, _maximumBuoyancyForce);
+                    }
+                    _rb.AddForceAtPosition(force, _queryPoints[i]);
                 }
             }
         }
@@ -225,9 +234,9 @@ namespace Crest
             var _velocityRelativeToWater = _rb.velocity - waterSurfaceVel;
 
             var forcePosition = _rb.position + _forceHeightOffset * Vector3.up;
-            _rb.AddForceAtPosition(Vector3.up * Vector3.Dot(Vector3.up, -_velocityRelativeToWater) * _dragInWaterUp, forcePosition, ForceMode.Acceleration);
-            _rb.AddForceAtPosition(transform.right * Vector3.Dot(transform.right, -_velocityRelativeToWater) * _dragInWaterRight, forcePosition, ForceMode.Acceleration);
-            _rb.AddForceAtPosition(transform.forward * Vector3.Dot(transform.forward, -_velocityRelativeToWater) * _dragInWaterForward, forcePosition, ForceMode.Acceleration);
+            _rb.AddForceAtPosition(_dragInWaterUp * Vector3.Dot(Vector3.up, -_velocityRelativeToWater) * Vector3.up, forcePosition, ForceMode.Acceleration);
+            _rb.AddForceAtPosition(_dragInWaterRight * Vector3.Dot(transform.right, -_velocityRelativeToWater) * transform.right, forcePosition, ForceMode.Acceleration);
+            _rb.AddForceAtPosition(_dragInWaterForward * Vector3.Dot(transform.forward, -_velocityRelativeToWater) * transform.forward, forcePosition, ForceMode.Acceleration);
         }
 
         private void OnDrawGizmosSelected()

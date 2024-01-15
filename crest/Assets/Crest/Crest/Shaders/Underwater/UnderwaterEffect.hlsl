@@ -111,7 +111,7 @@ real4 Frag (Varyings input) : SV_Target
 		// Unity's lead. Fixes caustics stuttering when far from zero.
 		const float3 positionWS = ComputeWorldSpacePosition(uv, rawDepth, UNITY_MATRIX_I_VP);
 		const half3 view = normalize(_WorldSpaceCameraPos - positionWS);
-		float3 scenePos = _WorldSpaceCameraPos - view * sceneZ / dot(_CameraForward, -view);
+		float3 scenePos = _WorldSpaceCameraPos - view * sceneZ / dot(UNITY_MATRIX_I_V._13_23_33, view);
 		const Light lightMain = GetMainLight();
 		const real3 lightDir = lightMain.direction;
 		const real3 lightCol = lightMain.color;
@@ -131,5 +131,5 @@ real4 Frag (Varyings input) : SV_Target
 
 	float wt = ComputeMeniscusWeight(positionSS, mask, _HorizonNormal, meniscusDepth);
 
-	return half4(wt * sceneColour, 1.0);
+	return half4(wt * sceneColour, rawDepth > 0.0);
 }

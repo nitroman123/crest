@@ -6,15 +6,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Collections.LowLevel.Unsafe;
 using Crest.Internal;
-#if UNITY_EDITOR
+using System.Linq;
 using UnityEngine.Rendering;
 using UnityEditor;
-#if UNITY_2021_2_OR_NEWER
-using UnityEditor.SceneManagement;
-#else
-using UnityEditor.Experimental.SceneManagement;
-#endif
-#endif
 
 #if !UNITY_2020_3_OR_NEWER
 #error This version of Crest requires Unity 2020.3 or later.
@@ -26,10 +20,11 @@ namespace Crest
     /// The main script for the ocean system. Attach this to a GameObject to create an ocean. This script initializes the various data types and systems
     /// and moves/scales the ocean based on the viewpoint. It also hosts a number of global settings that can be tweaked here.
     /// </summary>
-    [ExecuteAlways, SelectionBase]
+    [ExecuteDuringEditMode(ExecuteDuringEditModeAttribute.Include.None)]
+    [SelectionBase]
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SCRIPTS + "Ocean Renderer")]
     [HelpURL(Constants.HELP_URL_GENERAL)]
-    public partial class OceanRenderer : MonoBehaviour
+    public partial class OceanRenderer : CustomMonoBehaviour
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -41,7 +36,7 @@ namespace Crest
 #pragma warning restore 414
 
         [Tooltip("Base wind speed in km/h. Controls wave conditions. Can be overridden on ShapeGerstner components."), Range(0, 150f, power: 2f)]
-        public float _globalWindSpeed = 10f;
+        public float _globalWindSpeed = 150f;
 
         [Tooltip("The viewpoint which drives the ocean detail. Defaults to the camera."), SerializeField]
         Transform _viewpoint;
@@ -111,6 +106,23 @@ namespace Crest
             }
         }
 
+        public Camera ViewCameraExcludingSceneCamera
+        {
+            get
+            {
+                if (_camera != null)
+                {
+                    return _camera;
+                }
+
+                return Camera.main;
+            }
+            set
+            {
+                _camera = value;
+            }
+        }
+
         [Tooltip("The height where detail is focused is smoothed to avoid popping which is undesireable after a teleport. Threshold is in Unity units."), SerializeField]
         float _teleportThreshold = 10f;
         float _teleportTimerForHeightQueries = 0f;
@@ -119,6 +131,8 @@ namespace Crest
         Vector3 _oldViewerPosition = Vector3.zero;
 
         public Transform Root { get; private set; }
+
+        public GameObject Container { get; private set; }
 
         // does not respond to _timeProvider changing in inspector
 
@@ -171,6 +185,9 @@ namespace Crest
         internal Material _material = null;
         public Material OceanMaterial { get => _material; set => _material = value; }
 
+        [Tooltip("Use prefab for water tiles. The only requirements are that the prefab must contain a MeshRenderer at the root and not a MeshFilter or OceanChunkRenderer. MR values will be overwritten where necessary and the prefabs are linked in edit mode.")]
+        public GameObject _waterTilePrefab;
+
         [System.Obsolete("Use the _layer field instead."), HideInInspector, SerializeField]
         string _layerName = "";
         [System.Obsolete("Use the Layer property instead.")]
@@ -210,6 +227,10 @@ namespace Crest
 
         [SerializeField, Tooltip("Number of ocean tile scales/LODs to generate."), Range(2, LodDataMgr.MAX_LOD_COUNT)]
         int _lodCount = 7;
+
+        [Tooltip("Applied to the extents' far vertices to make the larger. Increase if the extents do not reach the horizon or you see the underwater effect at the horizon.")]
+        [SerializeField, Delayed]
+        internal float _extentsSizeMultiplier = 100f;
 
 
         [Header("Simulation Params")]
@@ -311,24 +332,54 @@ namespace Crest
         bool _followSceneCamera = true;
 #pragma warning restore 414
 
-        [Header("Server Settings")]
-        [Tooltip("Emulate batch mode which models running without a display (but with a GPU available). Equivalent to running standalone build with -batchmode argument."), SerializeField]
-        bool _forceBatchMode = false;
-        [Tooltip("Emulate running on a client without a GPU. Equivalent to running standalone with -nographics argument."), SerializeField]
-        bool _forceNoGPU = false;
+        [Tooltip("Whether height queries are enabled in edit mode."), SerializeField]
+#pragma warning disable 414
+        bool _heightQueries = true;
+#pragma warning restore 414
 
-        [Header("Debug Params")]
 
-        [Tooltip("Attach debug gui that adds some controls and allows to visualise the ocean data."), SerializeField]
-        bool _attachDebugGUI = false;
-        [Tooltip("Move ocean with viewpoint.")]
-        bool _followViewpoint = true;
-        [Tooltip("Set the ocean surface tiles hidden by default to clean up the hierarchy.")]
-        public bool _hideOceanTileGameObjects = true;
-        [HideInInspector, Tooltip("Whether to generate ocean geometry tiles uniformly (with overlaps).")]
-        public bool _uniformTiles = false;
-        [HideInInspector, Tooltip("Disable generating a wide strip of triangles at the outer edge to extend ocean to edge of view frustum.")]
-        public bool _disableSkirt = false;
+        [Space(10)]
+
+        [SerializeField]
+        internal DebugFields _debug = new DebugFields();
+
+        [System.Serializable]
+        internal class DebugFields
+        {
+            [Tooltip("Attach debug gui that adds some controls and allows to visualise the ocean data.")]
+            public bool _attachDebugGUI = false;
+
+            [Tooltip("Set the ocean surface tiles hidden by default to clean up the hierarchy.")]
+            public bool _showOceanTileGameObjects = false;
+
+#if CREST_DEBUG
+            [HideInInspector]
+#endif
+            [Tooltip("Ocean will not move with viewpoint.")]
+            public bool _disableFollowViewpoint = false;
+
+#if CREST_DEBUG
+            [Tooltip("Whether to generate ocean geometry tiles uniformly (with overlaps).")]
+            public bool _uniformTiles = false;
+
+            [Tooltip("Disable generating a wide strip of triangles at the outer edge to extend ocean to edge of view frustum.")]
+            public bool _disableSkirt = false;
+
+            public bool _drawLodOutline = false;
+#endif
+
+            [Tooltip("Resources are normally released in OnDestroy (except in edit mode) which avoids expensive rebuilds when toggling this component. This option moves it to OnDisable. If you need this active then please report to us.")]
+            public bool _destroyResourcesInOnDisable = false;
+
+            [Header("Server Settings")]
+
+            [Tooltip("Emulate batch mode which models running without a display (but with a GPU available). Equivalent to running standalone build with -batchmode argument."), SerializeField]
+            public bool _forceBatchMode = false;
+
+            [Tooltip("Emulate running on a client without a GPU. Equivalent to running standalone with -nographics argument."), SerializeField]
+            public bool _forceNoGPU = false;
+        }
+
 
         /// <summary>
         /// Current ocean scale (changes with viewer altitude).
@@ -387,6 +438,8 @@ namespace Crest
 
         public static OceanRenderer Instance { get; private set; }
 
+        bool _isInitialized = false;
+
         // A hash of the settings used to generate the ocean, used to regenerate when necessary
         int _generatedSettingsHash = 0;
 
@@ -398,7 +451,7 @@ namespace Crest
             get
             {
                 var noGPU = SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null;
-                var emulateNoGPU = (Instance != null ? Instance._forceNoGPU : false);
+                var emulateNoGPU = (Instance != null ? Instance._debug._forceNoGPU : false);
                 return noGPU || emulateNoGPU;
             }
         }
@@ -406,7 +459,7 @@ namespace Crest
         /// <summary>
         /// Is runtime environment without graphics card
         /// </summary>
-        public static bool RunningHeadless => Application.isBatchMode || (Instance != null ? Instance._forceBatchMode : false);
+        public static bool RunningHeadless => Application.isBatchMode || (Instance != null ? Instance._debug._forceBatchMode : false);
 
         // We are computing these values to be optimal based on the base mesh vertex density.
         float _lodAlphaBlackPointFade;
@@ -446,6 +499,11 @@ namespace Crest
         static float _lastUpdateEditorTime = -1f;
         public static float LastUpdateEditorTime => _lastUpdateEditorTime;
         static int _editorFrames = 0;
+
+        // Useful for rate limiting processes called outside of RunUpdate like camera events.
+        static int s_EditorFramesSinceUpdate = 0;
+        public static int EditorFramesSinceUpdate => Application.isPlaying ? 0 : s_EditorFramesSinceUpdate;
+        public static bool IsWithinEditorUpdate => EditorFramesSinceUpdate == 0;
 #endif
 
         BuildCommandBuffer _commandbufferBuilder;
@@ -488,25 +546,16 @@ namespace Crest
         BufferedData<PerCascadeInstanceData[]> _perCascadeInstanceData;
         public int BufferSize { get; private set; }
 
-        // When leaving the last prefab stage, OnDisabled will be called but GetCurrentPrefabStage will return nothing
-        // which will fail the prefab check and disable the OceanRenderer in the scene. We need to track it ourselves.
-#pragma warning disable 414
-        static bool s_IsPrefabStage = false;
-#pragma warning restore 414
-
         // Drive state from OnEnable and OnDisable? OnEnable on RegisterLodDataInput seems to get called on script reload
         void OnEnable()
         {
-            // We don't run in "prefab scenes", i.e. when editing a prefab. Bail out if prefab scene is detected.
-#if UNITY_EDITOR
-            if (PrefabStageUtility.GetCurrentPrefabStage() != null)
+            _isFirstFrameSinceEnabled = true;
+
+            if (_isInitialized)
             {
-                s_IsPrefabStage = true;
+                Enable();
                 return;
             }
-#endif
-
-            _isFirstFrameSinceEnabled = true;
 
             // Setup a default time provider, and add the override one (from the inspector)
             _timeProviderStack.Clear();
@@ -539,17 +588,26 @@ namespace Crest
             }
 #endif
 
+            // Other components may place objects under the container so it needs to be created early.
+            Container = new GameObject();
+            Container.name = "Container";
+            Container.hideFlags = _debug._showOceanTileGameObjects ? HideFlags.DontSave : HideFlags.HideAndDontSave;
+            Container.transform.SetParent(transform, worldPositionStays: false);
+
             Instance = this;
             Scale = Mathf.Clamp(Scale, _minScale, _maxScale);
 
             // Make sure we have correct defaults in case simulations are not enabled.
-            LodDataMgrClipSurface.BindNullToGraphicsShaders();
-            LodDataMgrDynWaves.BindNullToGraphicsShaders();
-            LodDataMgrFlow.BindNullToGraphicsShaders();
-            LodDataMgrFoam.BindNullToGraphicsShaders();
-            LodDataMgrSeaFloorDepth.BindNullToGraphicsShaders();
-            LodDataMgrShadow.BindNullToGraphicsShaders();
-            LodDataMgrAlbedo.BindNullToGraphicsShaders();
+            if (!RunningWithoutGPU)
+            {
+                LodDataMgrClipSurface.BindNullToGraphicsShaders();
+                LodDataMgrDynWaves.BindNullToGraphicsShaders();
+                LodDataMgrFlow.BindNullToGraphicsShaders();
+                LodDataMgrFoam.BindNullToGraphicsShaders();
+                LodDataMgrSeaFloorDepth.BindNullToGraphicsShaders();
+                LodDataMgrShadow.BindNullToGraphicsShaders();
+                LodDataMgrAlbedo.BindNullToGraphicsShaders();
+            }
 
             CreateDestroySubSystems();
 
@@ -565,12 +623,13 @@ namespace Crest
                 }
             }
 
-            _perCascadeInstanceData = new BufferedData<PerCascadeInstanceData[]>(BufferSize, () => new PerCascadeInstanceData[LodDataMgr.MAX_LOD_COUNT + 1]);
+            _perCascadeInstanceData = new BufferedData<PerCascadeInstanceData[]>(BufferSize, () => new PerCascadeInstanceData[LodDataMgr.MAX_LOD_COUNT]);
             _bufPerCascadeInstanceData = new ComputeBuffer(_perCascadeInstanceData.Current.Length, UnsafeUtility.SizeOf<PerCascadeInstanceData>());
             Shader.SetGlobalBuffer(sp_perCascadeInstanceData, _bufPerCascadeInstanceData);
             _bufPerCascadeInstanceDataSource = new ComputeBuffer(_perCascadeInstanceData.Previous(1).Length, UnsafeUtility.SizeOf<PerCascadeInstanceData>());
             Shader.SetGlobalBuffer(sp_CrestPerCascadeInstanceDataSource, _bufPerCascadeInstanceDataSource);
 
+            // The extra LOD accounts for reading off the cascade (eg CurrentIndex + LodChange + 1).
             _cascadeParams = new BufferedData<CascadeParams[]>(BufferSize, () => new CascadeParams[LodDataMgr.MAX_LOD_COUNT + 1]);
             _bufCascadeDataTgt = new ComputeBuffer(_cascadeParams.Current.Length, UnsafeUtility.SizeOf<CascadeParams>());
             Shader.SetGlobalBuffer(sp_cascadeData, _bufCascadeDataTgt);
@@ -589,12 +648,11 @@ namespace Crest
             _lodAlphaBlackPointWhitePointFade = 1f - _lodAlphaBlackPointFade - _lodAlphaBlackPointFade;
 
             Root = OceanBuilder.GenerateMesh(this, _oceanChunkRenderers, _lodDataResolution, _geometryDownSampleFactor, _lodCount);
+            Root.SetParent(Container.transform, worldPositionStays: false);
 
             _commandbufferBuilder = new BuildCommandBuffer();
 
-            ValidateViewpoint();
-
-            if (_attachDebugGUI && GetComponent<OceanDebugGUI>() == null)
+            if (_debug._attachDebugGUI && !TryGetComponent<OceanDebugGUI>(out _))
             {
                 gameObject.AddComponent<OceanDebugGUI>().hideFlags = HideFlags.DontSave;
             }
@@ -611,40 +669,95 @@ namespace Crest
             _canSkipCulling = false;
 
             _generatedSettingsHash = CalculateSettingsHash();
+
+            Enable();
+            _isInitialized = true;
+        }
+
+        void Enable()
+        {
+            Instance = this;
+
+            foreach (var lodData in _lodDatas)
+            {
+                lodData?.Enable();
+            }
+
+            Camera.onPreRender -= OnPreRenderCamera;
+            Camera.onPreRender += OnPreRenderCamera;
+            Camera.onPostRender -= OnPostRenderCamera;
+            Camera.onPostRender += OnPostRenderCamera;
+            RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+            RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+
+            Container.SetActive(true);
+        }
+
+        void OnPreRenderCamera(Camera camera)
+        {
+            if (!Helpers.MaskIncludesLayer(camera.cullingMask, Layer))
+            {
+                return;
+            }
+
+            if (!CreateShadowData)
+            {
+                LodDataMgrShadow.BindScreenSpaceNullToGraphicsShaders(camera);
+            }
+        }
+
+        void OnPostRenderCamera(Camera camera)
+        {
+            // Clean up for subsequent cameras or water could disappear.
+            UnderwaterRenderer.DisableOceanMaskKeywords();
+        }
+
+        void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
+        {
+            // Clean up for subsequent cameras or water could disappear.
+            UnderwaterRenderer.DisableOceanMaskKeywords();
         }
 
         internal void Rebuild()
         {
-            enabled = false;
-            enabled = true;
+            CleanUp();
+            Disable();
+            OnEnable();
         }
 
         private void OnDisable()
         {
-#if UNITY_EDITOR
-            // We don't run in "prefab scenes", i.e. when editing a prefab. Bail out if prefab scene is detected.
-            if (PrefabStageUtility.GetCurrentPrefabStage() != null)
+            // Always clean up in OnDisable during edit mode as OnDestroy is not always called.
+            if (_debug._destroyResourcesInOnDisable || !Application.isPlaying)
             {
-                // We have just left a prefab scene on the stack and are now in another prefab scene.
+                CleanUp();
+            }
+
+            Disable();
+        }
+
+        void OnDestroy()
+        {
+            // Only clean up in OnDestroy when not in edit mode.
+            if (_debug._destroyResourcesInOnDisable || !Application.isPlaying)
+            {
                 return;
             }
-            else if (s_IsPrefabStage)
-            {
-                // We have left the last prefab scene and are now back to a normal scene. We do not want to disable the
-                // OceanRenderer.
-                s_IsPrefabStage = false;
-                return;
-            }
-#endif
 
             CleanUp();
-
-            Instance = null;
         }
 
 #if UNITY_EDITOR
         static void EditorUpdate()
         {
+            // Do not execute when editor is not active to conserve power and prevent possible leaks.
+            if (!UnityEditorInternal.InternalEditorUtility.isApplicationActive)
+            {
+                return;
+            }
+
+            s_EditorFramesSinceUpdate++;
+
             if (Instance == null) return;
 
             if (!EditorApplication.isPlaying)
@@ -652,6 +765,7 @@ namespace Crest
                 if (EditorApplication.timeSinceStartup - _lastUpdateEditorTime > 1f / Mathf.Clamp(Instance._editModeFPS, 0.01f, 60f))
                 {
                     _editorFrames++;
+                    s_EditorFramesSinceUpdate = 0;
 
                     _lastUpdateEditorTime = (float)EditorApplication.timeSinceStartup;
 
@@ -847,15 +961,6 @@ namespace Crest
 
         bool VerifyRequirements()
         {
-#if UNITY_EDITOR
-            // If running a build, don't assert any requirements at all. Requirements are for
-            // the runtime, not for making builds.
-            if (BuildPipeline.isBuildingPlayer)
-            {
-                return true;
-            }
-#endif
-
             if (!RunningWithoutGPU)
             {
                 if (Application.platform == RuntimePlatform.WebGLPlayer)
@@ -864,7 +969,11 @@ namespace Crest
                     return false;
                 }
 #if UNITY_EDITOR
-                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2 ||
+                if
+                (
+#if !UNITY_2023_1_OR_NEWER
+                    SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2 ||
+#endif
                     SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3 ||
                     SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore)
                 {
@@ -892,19 +1001,14 @@ namespace Crest
             return true;
         }
 
-        void ValidateViewpoint()
-        {
-            if (Viewpoint == null)
-            {
-                Debug.LogError("Crest: Crest needs to know where to focus the ocean detail. Please set the <i>ViewCamera</i> or the <i>Viewpoint</i> property that will render the ocean, or tag the primary camera as <i>MainCamera</i>.", this);
-            }
-        }
-
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void InitStatics()
         {
             // Init here from 2019.3 onwards
             Instance = null;
+#if UNITY_EDITOR
+            s_EditorFramesSinceUpdate = 0;
+#endif
         }
 
         void LateUpdate()
@@ -929,9 +1033,18 @@ namespace Crest
             Hashy.AddInt(_lodDataResolution, ref settingsHash);
             Hashy.AddInt(_geometryDownSampleFactor, ref settingsHash);
             Hashy.AddInt(_lodCount, ref settingsHash);
-            Hashy.AddBool(_forceBatchMode, ref settingsHash);
-            Hashy.AddBool(_forceNoGPU, ref settingsHash);
-            Hashy.AddBool(_hideOceanTileGameObjects, ref settingsHash);
+            Hashy.AddFloat(_extentsSizeMultiplier, ref settingsHash);
+            Hashy.AddBool(_debug._forceBatchMode, ref settingsHash);
+            Hashy.AddBool(_debug._forceNoGPU, ref settingsHash);
+            Hashy.AddBool(_debug._showOceanTileGameObjects, ref settingsHash);
+#if CREST_DEBUG
+            Hashy.AddBool(_debug._disableSkirt, ref settingsHash);
+            Hashy.AddBool(_debug._uniformTiles, ref settingsHash);
+#endif
+            if (_waterTilePrefab != null)
+            {
+                Hashy.AddObject(_waterTilePrefab, ref settingsHash);
+            }
 
 #pragma warning disable 0618
             Hashy.AddObject(_layerName, ref settingsHash);
@@ -974,9 +1087,7 @@ namespace Crest
             var meshScaleLerp = needToBlendOutShape ? ViewerAltitudeLevelAlpha : 0f;
             Shader.SetGlobalFloat(sp_meshScaleLerp, meshScaleLerp);
 
-            ValidateViewpoint();
-
-            if (_followViewpoint && Viewpoint != null)
+            if (!_debug._disableFollowViewpoint && ViewCamera != null)
             {
                 LateUpdatePosition();
                 LateUpdateViewerHeight();
@@ -987,7 +1098,7 @@ namespace Crest
 
             LateUpdateLods();
 
-            if (Viewpoint != null)
+            if (ViewCamera != null)
             {
                 LateUpdateTiles();
             }
@@ -1021,7 +1132,8 @@ namespace Crest
 #if UNITY_EDITOR
             // Issue #630 - seems to be a terrible memory leak coming from creating async gpu readbacks. We don't rely on queries in edit mode AFAIK
             // so knock this out.
-            if (EditorApplication.isPlaying)
+            // This was marked as resolved by Unity and confirmed fixed by forum posts.
+            if (_heightQueries || EditorApplication.isPlaying)
 #endif
             {
                 CollisionProvider?.UpdateQueries();
@@ -1052,8 +1164,7 @@ namespace Crest
                         break;
                     case SurfaceSelfIntersectionFixMode.Automatic:
                         // Skip if UnderwaterRenderer is not full-screen (ocean will be clipped).
-                        var skip = UnderwaterRenderer.Instance != null && UnderwaterRenderer.Instance.IsActive &&
-                            UnderwaterRenderer.Instance._mode != UnderwaterRenderer.Mode.FullScreen;
+                        var skip = UnderwaterRenderer.SkipSurfaceSelfIntersectionFixMode;
                         value = skip ? 0f : height < -2f ? 1f : height > 2f ? -1f : 0f;
                         break;
                 }
@@ -1284,6 +1395,7 @@ namespace Crest
                 if (!canSkipCulling)
                 {
                     var chunkBounds = tile.Rend.bounds;
+                    var chunkUndisplacedBoundsXZ = tile.UnexpandedBoundsXZ;
 
                     var largestOverlap = 0f;
                     var overlappingOne = false;
@@ -1309,10 +1421,14 @@ namespace Crest
                             {
                                 var overlap = 0f;
                                 {
-                                    var xMin = Mathf.Max(bounds.min.x, chunkBounds.min.x);
-                                    var xMax = Mathf.Min(bounds.max.x, chunkBounds.max.x);
-                                    var zMin = Mathf.Max(bounds.min.z, chunkBounds.min.z);
-                                    var zMax = Mathf.Min(bounds.max.z, chunkBounds.max.z);
+                                    // Use the unexpanded bounds to prevent leaking as generally this feature will be
+                                    // for an inland body of water where hopefully there is attenuation between it and
+                                    // the ocean to handle the ocean's displacement. The inland water body will unlikely
+                                    // have large displacement but can be mitigated with a decent buffer zone.
+                                    var xMin = Mathf.Max(bounds.min.x, chunkUndisplacedBoundsXZ.min.x);
+                                    var xMax = Mathf.Min(bounds.max.x, chunkUndisplacedBoundsXZ.max.x);
+                                    var zMin = Mathf.Max(bounds.min.z, chunkUndisplacedBoundsXZ.min.y);
+                                    var zMax = Mathf.Min(bounds.max.z, chunkUndisplacedBoundsXZ.max.y);
                                     if (xMin < xMax && zMin < zMax)
                                     {
                                         overlap = (xMax - xMin) * (zMax - zMin);
@@ -1356,12 +1472,7 @@ namespace Crest
 
         void LateUpdateResetMaxDisplacementFromShape()
         {
-            if (FrameCount != _maxDisplacementCachedTime)
-            {
-                _maxHorizDispFromShape = _maxVertDispFromShape = _maxVertDispFromWaves = 0f;
-            }
-
-            _maxDisplacementCachedTime = FrameCount;
+            _maxHorizDispFromShape = _maxVertDispFromShape = _maxVertDispFromWaves = 0f;
         }
 
         /// <summary>
@@ -1386,7 +1497,6 @@ namespace Crest
         float _maxHorizDispFromShape = 0f;
         float _maxVertDispFromShape = 0f;
         float _maxVertDispFromWaves = 0f;
-        int _maxDisplacementCachedTime = 0;
         /// <summary>
         /// The maximum horizontal distance that the shape scripts are displacing the shape.
         /// </summary>
@@ -1410,19 +1520,15 @@ namespace Crest
             }
             _lodDatas.Clear();
 
-#if UNITY_EDITOR
-            if (!EditorApplication.isPlaying && Root != null)
-            {
-                DestroyImmediate(Root.gameObject);
-            }
-            else
-#endif
-            if (Root != null)
-            {
-                Destroy(Root.gameObject);
-            }
-
+            // Clean up everything created through the Ocean Builder.
+            OceanBuilder.CleanUp(this);
             Root = null;
+
+            if (Container)
+            {
+                Helpers.Destroy(Container);
+                Container = null;
+            }
 
             _lodTransform = null;
             _lodDataAnimWaves = null;
@@ -1452,6 +1558,27 @@ namespace Crest
             _bufCascadeDataTgt?.Dispose();
             _bufCascadeDataSrc?.Dispose();
             _bufPerCascadeInstanceDataSource?.Dispose();
+
+            _isInitialized = false;
+        }
+
+        void Disable()
+        {
+            foreach (var lodData in _lodDatas)
+            {
+                lodData?.Disable();
+            }
+
+            Camera.onPreRender -= OnPreRenderCamera;
+            Camera.onPostRender -= OnPostRenderCamera;
+            RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+
+            if (Container != null)
+            {
+                Container.SetActive(false);
+            }
+
+            Instance = null;
         }
 
         /// <summary>
@@ -1470,11 +1597,26 @@ namespace Crest
         [UnityEditor.Callbacks.DidReloadScripts]
         private static void OnReLoadScripts()
         {
-            Instance = FindObjectOfType<OceanRenderer>();
+            Instance = FindFirstObjectByType<OceanRenderer>();
         }
 
         private void OnDrawGizmos()
         {
+#if CREST_DEBUG
+            if (_debug._drawLodOutline)
+            {
+                if (Root != null && _perCascadeInstanceData?.Current != null)
+                {
+                    for (int lodIdx = 0; lodIdx < CurrentLodCount; lodIdx++)
+                    {
+                        Gizmos.color = Color.yellow;
+                        var width = _cascadeParams.Current[lodIdx]._texelWidth * _cascadeParams.Current[lodIdx]._textureRes;
+                        Gizmos.DrawWireCube(_cascadeParams.Current[lodIdx]._posSnapped.XNZ(SeaLevel), new Vector3(width, 0, width));
+                    }
+                }
+            }
+#endif
+
             // Don't need proxy if in play mode
             if (EditorApplication.isPlaying)
             {
@@ -1485,7 +1627,7 @@ namespace Crest
             if (_proxyPlane == null && _showOceanProxyPlane)
             {
                 _proxyPlane = GameObject.CreatePrimitive(PrimitiveType.Plane);
-                DestroyImmediate(_proxyPlane.GetComponent<Collider>());
+                Helpers.Destroy(_proxyPlane.GetComponent<Collider>());
                 _proxyPlane.hideFlags = HideFlags.HideAndDontSave;
                 _proxyPlane.transform.parent = transform;
                 _proxyPlane.transform.localPosition = Vector3.zero;
@@ -1520,60 +1662,10 @@ namespace Crest
         {
             ocean.Validate(ocean, ValidatedHelper.DebugLog);
 
-            // ShapeGerstnerBatched
-            var gerstners = FindObjectsOfType<ShapeGerstnerBatched>();
-            foreach (var gerstner in gerstners)
+            foreach (var component in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None).OfType<IValidated>())
             {
-                gerstner.Validate(ocean, ValidatedHelper.DebugLog);
-            }
-
-            // ShapeGerstner
-            foreach (var component in FindObjectsOfType<ShapeGerstner>())
-            {
+                if (component is OceanRenderer) continue;
                 component.Validate(ocean, ValidatedHelper.DebugLog);
-            }
-
-            // ShapeFFT
-            foreach (var component in FindObjectsOfType<ShapeFFT>())
-            {
-                component.Validate(ocean, ValidatedHelper.DebugLog);
-            }
-
-#pragma warning disable 0618
-            // UnderwaterEffect
-            var underwaters = FindObjectsOfType<UnderwaterEffect>();
-            foreach (var underwater in underwaters)
-            {
-                underwater.Validate(ocean, ValidatedHelper.DebugLog);
-            }
-#pragma warning restore 0618
-
-            // OceanDepthCache
-            var depthCaches = FindObjectsOfType<OceanDepthCache>();
-            foreach (var depthCache in depthCaches)
-            {
-                depthCache.Validate(ocean, ValidatedHelper.DebugLog);
-            }
-
-            // FloatingObjectBase
-            var floatingObjects = FindObjectsOfType<FloatingObjectBase>();
-            foreach (var floatingObject in floatingObjects)
-            {
-                floatingObject.Validate(ocean, ValidatedHelper.DebugLog);
-            }
-
-            // Inputs
-            var inputs = FindObjectsOfType<RegisterLodDataInputBase>();
-            foreach (var input in inputs)
-            {
-                input.Validate(ocean, ValidatedHelper.DebugLog);
-            }
-
-            // WaterBody
-            var waterBodies = FindObjectsOfType<WaterBody>();
-            foreach (var waterBody in waterBodies)
-            {
-                waterBody.Validate(ocean, ValidatedHelper.DebugLog);
             }
 
             Debug.Log("Crest: Validation complete!", ocean);
@@ -1584,6 +1676,9 @@ namespace Crest
             var isValid = true;
 
             isValid = ValidateObsolete(ocean, showMessage);
+
+            isValid = isValid && ValidatedHelper.ValidateNoRotation(this, transform, showMessage);
+            isValid = isValid && ValidatedHelper.ValidateNoScale(this, transform, showMessage);
 
             if (_material == null)
             {
@@ -1598,7 +1693,7 @@ namespace Crest
             }
 
             // OceanRenderer
-            if (FindObjectsOfType<OceanRenderer>().Length > 1)
+            if (FindObjectsByType<OceanRenderer>(FindObjectsSortMode.None).Length > 1)
             {
                 showMessage
                 (
@@ -1609,15 +1704,15 @@ namespace Crest
             }
 
             // ShapeGerstnerBatched
-            var gerstnerBatches = FindObjectsOfType<ShapeGerstnerBatched>();
-            var gerstners = FindObjectsOfType<ShapeGerstner>();
-            var ffts = FindObjectsOfType<ShapeFFT>();
+            var gerstnerBatches = FindObjectsByType<ShapeGerstnerBatched>(FindObjectsSortMode.None);
+            var gerstners = FindObjectsByType<ShapeGerstner>(FindObjectsSortMode.None);
+            var ffts = FindObjectsByType<ShapeFFT>(FindObjectsSortMode.None);
             if (gerstnerBatches.Length == 0 && gerstners.Length == 0 && ffts.Length == 0)
             {
                 showMessage
                 (
-                    "No ShapeGerstnerBatched component found, so ocean will appear flat (no waves).",
-                    "Assign a ShapeGerstnerBatched component to a GameObject.",
+                    "No Shape* component (ShapeFFT, ShapeGerstner, ShapeGerstnerBatched) found, so ocean will appear flat (no waves).",
+                    "Assign a Shape* component to a GameObject.",
                     ValidatedHelper.MessageType.Info, ocean
                 );
             }
@@ -1644,67 +1739,15 @@ namespace Crest
                 );
             }
 
-            var hasMaterial = ocean != null && ocean._material != null;
-            var oceanColourIncorrectText = "Ocean colour will be incorrect. ";
-
-            // Check lighting. There is an edge case where the lighting data is invalid because settings has changed.
-            // We don't need to check anything if the following material options are used.
-            if (hasMaterial && !ocean._material.IsKeywordEnabled("_PROCEDURALSKY_ON") &&
-                !ocean._material.IsKeywordEnabled("_OVERRIDEREFLECTIONCUBEMAP_ON"))
-            {
-                var alternativesText = "Alternatively, try the <i>Procedural Sky</i> or <i>Override Reflection " +
-                    "Cubemap</i> option on the ocean material.";
-
-                if (RenderSettings.defaultReflectionMode == DefaultReflectionMode.Skybox)
-                {
-                    var isLightingDataMissing = Lightmapping.giWorkflowMode != Lightmapping.GIWorkflowMode.Iterative &&
-                        !Lightmapping.lightingDataAsset;
-
-                    // Generated lighting will be wrong without a skybox.
-                    if (RenderSettings.skybox == null)
-                    {
-                        showMessage
-                        (
-                            "There is no skybox set in the Lighting window. " + oceanColourIncorrectText,
-                            "Configure a valid skybox. " + alternativesText,
-                            ValidatedHelper.MessageType.Warning, ocean
-                        );
-                    }
-                    // Spherical Harmonics is missing and required.
-                    else if (isLightingDataMissing)
-                    {
-                        showMessage
-                        (
-                            "Lighting data is missing which provides baked spherical harmonics." + oceanColourIncorrectText,
-                            "Generate lighting or enable Auto Generate from the Lighting window. " + alternativesText,
-                            ValidatedHelper.MessageType.Warning, ocean
-                        );
-                    }
-                }
-                else
-                {
-                    // We need a cubemap if using custom reflections.
-                    if (RenderSettings.customReflection == null)
-                    {
-                        showMessage
-                        (
-                            "Environmental Reflections is set to Custom, but no cubemap has been provided. " + oceanColourIncorrectText,
-                            "Assign a cubemap in the Lighting window. " + alternativesText,
-                            ValidatedHelper.MessageType.Warning, ocean
-                        );
-                    }
-                }
-            }
-            // Check override reflections cubemap option. Procedural skybox will override this, but it is a waste to
-            // have the keyword enabled and not use it.
-            else if (hasMaterial && ocean._material.IsKeywordEnabled("_OVERRIDEREFLECTIONCUBEMAP_ON") &&
-                ocean._material.GetTexture("_ReflectionCubemapOverride") == null)
+            // We need to find hidden probes too, but do not include assets.
+            if (Resources.FindObjectsOfTypeAll<ReflectionProbe>().Where(x => !EditorUtility.IsPersistent(x)).Count() > 0)
             {
                 showMessage
                 (
-                    "<i>Override Reflection Cubemap</i> is enabled but no cubemap has been provided. " + oceanColourIncorrectText,
-                    "Assign a cubemap or disable the checkbox on the ocean material.",
-                    ValidatedHelper.MessageType.Warning, ocean
+                    "There are reflection probes in the scene. These can cause tiling to appear on the water surface if not set up correctly.",
+                    "For reflections probes that affect the water, they will either need to cover the visible water tiles or water tiles need to ignore reflection probes (can done done with <i>Water Tile Prefab</i> field). " +
+                    $"For all reflection probles that include the <i>{LayerMask.LayerToName(Layer)}</i> layer, make sure they are above the water surface as underwater reflections are not supported.",
+                    ValidatedHelper.MessageType.Info, ocean
                 );
             }
 
@@ -1761,16 +1804,6 @@ namespace Crest
             if (_simSettingsAnimatedWaves)
             {
                 _simSettingsAnimatedWaves.Validate(ocean, showMessage);
-            }
-
-            if (transform.eulerAngles.magnitude > 0.0001f)
-            {
-                showMessage
-                (
-                    $"There must be no rotation on the ocean GameObject, and no rotation on any parent. Currently the rotation Euler angles are {transform.eulerAngles}.",
-                    "Clear this rotation from the GameObject.",
-                    ValidatedHelper.MessageType.Error, ocean
-                );
             }
 
             // For safety.
@@ -1857,8 +1890,10 @@ namespace Crest
             return isValid;
         }
 
-        void OnValidate()
+        protected override void OnValidate()
         {
+            base.OnValidate();
+
             // Must be at least 0.25, and must be on a power of 2
             _minScale = Mathf.Pow(2f, Mathf.Round(Mathf.Log(Mathf.Max(_minScale, 0.25f), 2f)));
 
@@ -1923,7 +1958,7 @@ namespace Crest
     }
 
     [CustomEditor(typeof(OceanRenderer))]
-    public class OceanRendererEditor : ValidatedEditor
+    public class OceanRendererEditor : CustomBaseEditor
     {
         OceanRenderer _target;
         MaterialEditor _materialEditor;
@@ -1944,17 +1979,18 @@ namespace Crest
             if (_materialEditor != null)
             {
                 // Free the memory used by default MaterialEditor.
-                DestroyImmediate(_materialEditor);
+                Helpers.Destroy(_materialEditor);
             }
         }
 
         public override void OnInspectorGUI()
         {
+            var target = this.target as OceanRenderer;
+
             var currentAssignedTP = serializedObject.FindProperty("_timeProvider").objectReferenceValue;
 
             base.OnInspectorGUI();
 
-            var target = this.target as OceanRenderer;
 
             // Detect if user changed TP, if so update stack
             var newlyAssignedTP = serializedObject.FindProperty("_timeProvider").objectReferenceValue;
@@ -1970,6 +2006,18 @@ namespace Crest
                 }
             }
 
+            // Display version in information box.
+            {
+                var padding = GUI.skin.GetStyle("HelpBox").padding;
+                GUI.skin.GetStyle("HelpBox").padding = new RectOffset(10, 10, 10, 10);
+
+                EditorGUILayout.Space();
+                EditorGUILayout.HelpBox($"Crest Ocean System\nVersion: {Constants.HELP_URL_VERSION}", MessageType.None);
+                EditorGUILayout.Space();
+
+                GUI.skin.GetStyle("HelpBox").padding = padding;
+            }
+
             if (GUILayout.Button("Validate Setup"))
             {
                 OceanRenderer.RunValidation(target);
@@ -1977,8 +2025,10 @@ namespace Crest
 
             if (GUILayout.Button("Open Material Online Help"))
             {
-                Application.OpenURL(Internal.Constants.HELP_URL_BASE_USER + "configuration.html" + Internal.Constants.HELP_URL_RP + "#material-parameters");
+                Application.OpenURL(Internal.Constants.HELP_URL_BASE_USER + "water-appearance.html" + Internal.Constants.HELP_URL_RP + "#material-parameters");
             }
+
+            GUILayout.Space(10);
 
             DrawMaterialEditor();
         }
@@ -2000,7 +2050,7 @@ namespace Crest
                 if (_materialEditor != null)
                 {
                     // Free the memory used by the previous MaterialEditor.
-                    DestroyImmediate(_materialEditor);
+                    Helpers.Destroy(_materialEditor);
                 }
 
                 if (_target._material != null)
@@ -2016,7 +2066,7 @@ namespace Crest
                 _materialEditor.DrawHeader();
 
                 // We need to prevent the user from editing Unity's default materials.
-                bool isDefaultMaterial = !AssetDatabase.GetAssetPath(_target._material).StartsWith("Assets");
+                bool isDefaultMaterial = !AssetDatabase.GetAssetPath(_target._material).StartsWithNoAlloc("Assets");
 
                 using (new EditorGUI.DisabledGroupScope(isDefaultMaterial))
                 {

@@ -3,17 +3,15 @@
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
 using UnityEngine;
-
-#if UNITY_EDITOR
 using UnityEditor;
-#endif
 
 namespace Crest
 {
     /// <summary>
     /// Base class for objects that float on water.
     /// </summary>
-    public abstract partial class FloatingObjectBase : MonoBehaviour
+    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "collision-shape-and-buoyancy-physics.html" + Internal.Constants.HELP_URL_RP + "#buoyancy")]
+    public abstract partial class FloatingObjectBase : CustomMonoBehaviour
     {
         public abstract float ObjectWidth { get; }
         public abstract bool InWater { get; }
@@ -40,22 +38,8 @@ namespace Crest
                 isValid = false;
             }
 
-            var rbs = GetComponentsInChildren<Rigidbody>();
-            if (rbs.Length != 1)
-            {
-                showMessage
-                (
-                    $"Expected to have one rigidbody on floating object, currently has {rbs.Length} object(s).",
-                    "Remove additional <i>Rigidbody</i> components.",
-                    ValidatedHelper.MessageType.Error, this
-                );
-            }
-
             return isValid;
         }
     }
-
-    [CustomEditor(typeof(FloatingObjectBase), true), CanEditMultipleObjects]
-    class FloatingObjectBaseEditor : ValidatedEditor { }
 #endif
 }

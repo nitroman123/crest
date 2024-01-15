@@ -9,9 +9,8 @@ namespace Crest
     /// <summary>
     /// Registers a custom input to the foam simulation. Attach this GameObjects that you want to influence the foam simulation, such as depositing foam on the surface.
     /// </summary>
-    [ExecuteAlways]
     [AddComponentMenu(MENU_PREFIX + "Foam Input")]
-    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "ocean-simulation.html" + Internal.Constants.HELP_URL_RP + "#foam")]
+    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "water-appearance.html" + Internal.Constants.HELP_URL_RP + "#foam")]
     public class RegisterFoamInput : RegisterLodDataInputWithSplineSupport<LodDataMgrFoam, SplinePointDataFoam>
     {
         /// <summary>
@@ -31,7 +30,7 @@ namespace Crest
 
         protected override string ShaderPrefix => "Crest/Inputs/Foam";
 
-        protected override bool FollowHorizontalMotion => _followHorizontalMotion;
+        protected override bool FollowHorizontalMotion => base.FollowHorizontalMotion || _followHorizontalMotion;
 
         protected override string SplineShaderName => "Hidden/Crest/Inputs/Foam/Spline Geometry";
         protected override Vector2 DefaultCustomData => Vector2.right;

@@ -12,12 +12,32 @@ namespace Crest.Spline
         Vector2 GetData();
     }
 
+    public abstract class SplinePointDataBase : CustomMonoBehaviour, ISplinePointCustomData
+    {
+        public abstract Vector2 GetData();
+
+        public void NotifyOfSplineChange()
+        {
+            if (transform.parent == null)
+            {
+                return;
+            }
+
+#if UNITY_EDITOR
+            foreach (var receiver in transform.parent.GetComponents<IReceiveSplineChangeMessages>())
+            {
+                receiver.OnSplineChange();
+            }
+#endif
+        }
+    }
+
     /// <summary>
     /// Spline point, intended to be child of Spline object
     /// </summary>
-    [ExecuteAlways]
+    [ExecuteDuringEditMode]
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SPLINE + "Spline Point")]
-    public class SplinePoint : MonoBehaviour
+    public class SplinePoint : CustomMonoBehaviour
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -29,6 +49,36 @@ namespace Crest.Spline
 #pragma warning restore 414
 
 #if UNITY_EDITOR
+        void Update()
+        {
+            if (!transform.hasChanged)
+            {
+                return;
+            }
+
+            NotifyOnChange();
+
+            transform.hasChanged = false;
+        }
+
+        void NotifyOnChange()
+        {
+            if (transform.parent == null)
+            {
+                return;
+            }
+
+            foreach (var receiver in transform.parent.GetComponents<IReceiveSplineChangeMessages>())
+            {
+                receiver.OnSplineChange();
+            }
+        }
+
+        void OnDisable()
+        {
+            NotifyOnChange();
+        }
+
         void OnDrawGizmos()
         {
             // We could not get gizmos or handles to work well when 3D Icons is enabled. problems included
@@ -47,7 +97,13 @@ namespace Crest.Spline
 
         void OnDrawGizmosSelected()
         {
-            if (transform.parent.TryGetComponent(out IReceiveSplinePointOnDrawGizmosSelectedMessages receiver))
+            // Reduces spam. May have edge cases where spline will not update but that is fine for now.
+            if (gameObject != Selection.activeGameObject)
+            {
+                return;
+            }
+
+            foreach (var receiver in transform.parent.GetComponents<IReceiveSplinePointOnDrawGizmosSelectedMessages>())
             {
                 receiver.OnSplinePointDrawGizmosSelected(this);
             }
@@ -61,8 +117,19 @@ namespace Crest.Spline
         void OnSplinePointDrawGizmosSelected(SplinePoint point);
     }
 
+    public interface IReceiveSplineChangeMessages
+    {
+        void OnSplineChange();
+    }
+
+    [CustomEditor(typeof(SplinePointDataBase), editorForChildClasses: true)]
+    public class SplinePointBaseEditor : CustomBaseEditor
+    {
+
+    }
+
     [CustomEditor(typeof(SplinePoint))]
-    public class SplinePointEditor : Editor
+    public class SplinePointEditor : CustomBaseEditor
     {
         public override void OnInspectorGUI()
         {
@@ -72,7 +139,7 @@ namespace Crest.Spline
             var thisIdx = thisSP.transform.GetSiblingIndex();
 
             var parent = thisSP.transform.parent;
-            if (parent == null || parent.GetComponent<Spline>() == null)
+            if (parent == null || !parent.TryGetComponent<Spline>(out _))
             {
                 EditorGUILayout.HelpBox("Spline component must be present on parent of this GameObject.", MessageType.Error);
                 return;

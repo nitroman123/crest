@@ -3,10 +3,7 @@
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
 using UnityEngine;
-
-#if UNITY_EDITOR
 using UnityEditor;
-#endif
 
 namespace Crest
 {
@@ -14,7 +11,7 @@ namespace Crest
     /// Drives object/water interaction - sets parameters each frame on material that renders into the dynamic wave sim.
     /// </summary>
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SCRIPTS + "Object Water Interaction")]
-    public partial class ObjectWaterInteraction : MonoBehaviour
+    public partial class ObjectWaterInteraction : CustomMonoBehaviour
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -48,6 +45,11 @@ namespace Crest
 
         Renderer _renderer;
         MaterialPropertyBlock _mpb;
+
+        public static class ShaderIDs
+        {
+            public static readonly int s_Velocity = Shader.PropertyToID("_Velocity");
+        }
 
         private void Start()
         {
@@ -159,12 +161,12 @@ namespace Crest
 
             _renderer.GetPropertyBlock(_mpb);
 
-            _mpb.SetVector("_Velocity", vel);
-            _mpb.SetFloat("_SimDeltaTime", dt);
+            _mpb.SetVector(ShaderIDs.s_Velocity, vel);
+            _mpb.SetFloat(LodDataMgrPersistent.sp_SimDeltaTime, dt);
 
             // Weighting with this value helps keep ripples consistent for different gravity values
             var gravityMul = Mathf.Sqrt(ocean._lodDataDynWaves.Settings._gravityMultiplier / 25f);
-            _mpb.SetFloat("_Weight", weight * gravityMul);
+            _mpb.SetFloat(RegisterLodDataInputBase.sp_Weight, weight * gravityMul);
 
             _renderer.SetPropertyBlock(_mpb);
 
@@ -211,7 +213,7 @@ namespace Crest
                 isValid = false;
             }
 
-            if (GetComponent<RegisterDynWavesInput>() == null)
+            if (!TryGetComponent<RegisterDynWavesInput>(out _))
             {
                 showMessage
                 (
@@ -224,7 +226,7 @@ namespace Crest
                 isValid = false;
             }
 
-            if (GetComponent<Renderer>() == null)
+            if (!TryGetComponent<Renderer>(out _))
             {
                 showMessage
                 (
@@ -239,9 +241,6 @@ namespace Crest
 
             return isValid;
         }
-
-        [CustomEditor(typeof(ObjectWaterInteraction), true), CanEditMultipleObjects]
-        class ObjectWaterInteractionEditor : ValidatedEditor { }
     }
 #endif
 }

@@ -2,6 +2,8 @@
 
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
+using Crest.Internal;
+
 namespace Crest
 {
     using System.Collections.Generic;
@@ -40,6 +42,8 @@ namespace Crest
             public static readonly int s_CrestOceanMaskDepthTexture = Shader.PropertyToID("_CrestOceanMaskDepthTexture");
             public static readonly int s_CrestWaterVolumeFrontFaceTexture = Shader.PropertyToID("_CrestWaterVolumeFrontFaceTexture");
             public static readonly int s_CrestWaterVolumeBackFaceTexture = Shader.PropertyToID("_CrestWaterVolumeBackFaceTexture");
+
+            public static readonly int s_StencilRef = Shader.PropertyToID("_StencilRef");
         }
 
         internal enum VolumePass
@@ -198,7 +202,7 @@ namespace Crest
             Helpers.SetGlobalKeyword(k_KeywordVolume2D, _mode == Mode.Portal);
             Helpers.SetGlobalKeyword(k_KeywordVolumeHasBackFace, _mode == Mode.Volume || _mode == Mode.VolumeFlyThrough);
             maskMaterial.SetKeyword(k_KeywordVolume, _mode != Mode.FullScreen);
-            maskMaterial.SetInt("_StencilRef", UseStencilBufferOnMask ? k_StencilValueVolume : 0);
+            maskMaterial.SetInt(ShaderIDs.s_StencilRef, UseStencilBufferOnMask ? k_StencilValueVolume : 0);
         }
 
         void OnPreRenderOceanMask()
@@ -242,7 +246,7 @@ namespace Crest
         internal void PopulateVolume(CommandBuffer buffer, RenderTargetIdentifier frontTarget, RenderTargetIdentifier backTarget, MaterialPropertyBlock properties = null, Vector2Int targetSize = default)
         {
             // Front faces.
-            buffer.SetRenderTarget(frontTarget);
+            Helpers.SetRenderTarget(buffer, frontTarget);
             // Support RTHandle scaling.
             if (targetSize != Vector2Int.zero) buffer.SetViewport(new Rect(0f, 0f, targetSize.x, targetSize.y));
             buffer.ClearRenderTarget(true, false, Color.black);
@@ -262,7 +266,7 @@ namespace Crest
             if (_mode == Mode.Volume || _mode == Mode.VolumeFlyThrough)
             {
                 // Back faces.
-                buffer.SetRenderTarget(backTarget);
+                Helpers.SetRenderTarget(buffer, backTarget);
                 // Support RTHandle scaling.
                 if (targetSize != Vector2Int.zero) buffer.SetViewport(new Rect(0f, 0f, targetSize.x, targetSize.y));
                 buffer.ClearRenderTarget(true, false, Color.black);
@@ -281,7 +285,7 @@ namespace Crest
 
         internal void SetUpMask(CommandBuffer buffer, RenderTargetIdentifier maskTarget, RenderTargetIdentifier depthTarget)
         {
-            buffer.SetRenderTarget(maskTarget, depthTarget);
+            Helpers.SetRenderTarget(buffer, maskTarget, depthTarget);
             // When using the stencil we are already clearing depth and do not want to clear the stencil too. Clear
             // color only when using the stencil as the horizon effectively clears it when not using it.
             buffer.ClearRenderTarget(!UseStencilBufferOnMask, UseStencilBufferOnMask, Color.black);
@@ -297,7 +301,8 @@ namespace Crest
             }
 
             buffer.SetComputeTextureParam(_fixMaskComputeShader, _fixMaskKernel, ShaderIDs.s_CrestOceanMaskTexture, target);
-            _fixMaskComputeShader.SetKeyword("STEREO_INSTANCING_ON", XRHelpers.IsSinglePass);
+            // XR SPI will have a volume depth of two. If using RTHandles, then set manually as will be two for all cameras.
+            _fixMaskComputeShader.SetKeyword("STEREO_INSTANCING_ON", descriptor.volumeDepth > 1);
 
             buffer.DispatchCompute
             (

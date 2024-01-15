@@ -9,10 +9,9 @@ namespace Crest
     /// <summary>
     /// Registers a custom input to the wave shape. Attach this GameObjects that you want to render into the displacmeent textures to affect ocean shape.
     /// </summary>
-    [ExecuteAlways]
     [AddComponentMenu(MENU_PREFIX + "Animated Waves Input")]
-    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "ocean-simulation.html" + Internal.Constants.HELP_URL_RP + "#animated-waves")]
-    public class RegisterAnimWavesInput : RegisterLodDataInputWithSplineSupport<LodDataMgrAnimWaves>
+    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "waves.html" + Internal.Constants.HELP_URL_RP + "#wave-placement")]
+    public class RegisterAnimWavesInput : RegisterLodDataInputWithSplineSupport<LodDataMgrAnimWaves>, LodDataMgrAnimWaves.IShapeUpdatable
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -40,7 +39,7 @@ namespace Crest
 
         [SerializeField, Tooltip(k_displacementCorrectionTooltip)]
         bool _followHorizontalMotion = true;
-        protected override bool FollowHorizontalMotion => _followHorizontalMotion;
+        protected override bool FollowHorizontalMotion => base.FollowHorizontalMotion || _followHorizontalMotion;
 
         [SerializeField, Tooltip("Inform ocean how much this input will displace the ocean surface vertically. This is used to set bounding box heights for the ocean tiles.")]
         float _maxDisplacementVertical = 0f;
@@ -51,10 +50,22 @@ namespace Crest
         [Predicated(typeof(MeshRenderer)), DecoratedField]
         bool _reportRendererBoundsToOceanSystem = false;
 
-        protected override void Update()
+        protected override void OnEnable()
         {
-            base.Update();
+            base.OnEnable();
 
+            LodDataMgrAnimWaves.RegisterUpdatable(this);
+        }
+
+        protected override void OnDisable()
+        {
+            base.OnDisable();
+
+            LodDataMgrAnimWaves.DeregisterUpdatable(this);
+        }
+
+        public void CrestUpdate(UnityEngine.Rendering.CommandBuffer buf)
+        {
             if (OceanRenderer.Instance == null)
             {
                 return;

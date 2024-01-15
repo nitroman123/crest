@@ -5,10 +5,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using System.Collections.Generic;
-
-#if UNITY_EDITOR
 using UnityEditor;
-#endif
 
 namespace Crest
 {
@@ -16,10 +13,10 @@ namespace Crest
     /// Support script for Gerstner wave ocean shapes.
     /// Generates a number of batches of Gerstner waves.
     /// </summary>
-    [ExecuteAlways]
+    [ExecuteDuringEditMode(ExecuteDuringEditModeAttribute.Include.None)]
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SCRIPTS + "Shape Gerstner Batched")]
-    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "wave-conditions.html" + Internal.Constants.HELP_URL_RP)]
-    public partial class ShapeGerstnerBatched : MonoBehaviour, ICollProvider, IFloatingOrigin
+    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "waves.html" + Internal.Constants.HELP_URL_RP)]
+    public partial class ShapeGerstnerBatched : CustomMonoBehaviour, ICollProvider, IFloatingOrigin
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -88,6 +85,8 @@ namespace Crest
             public float Wavelength => 1.5f * OceanRenderer.Instance._lodTransform.MaxWavelength(_batchIndex) / 2f;
 
             public bool Enabled { get; set; }
+
+            public bool IgnoreTransitionWeight => false;
 
             public bool HasWaves { get; set; }
 
@@ -162,7 +161,7 @@ namespace Crest
             public readonly static Vector4[] _chopAmpsBatch = new Vector4[BATCH_SIZE / 4];
         }
 
-        internal static readonly CrestSortedList<int, ShapeGerstnerBatched> Instances = new CrestSortedList<int, ShapeGerstnerBatched>(new SiblingIndexComparer());
+        internal static readonly CrestSortedList<int, ShapeGerstnerBatched> Instances = new CrestSortedList<int, ShapeGerstnerBatched>(Helpers.SiblingIndexComparison);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void InitStatics()
@@ -313,16 +312,14 @@ namespace Crest
 
         void InitBatches()
         {
-            // Get the wave
-            MeshRenderer rend = GetComponent<MeshRenderer>();
-            if (_mode == GerstnerMode.Geometry && rend != null)
+            if (TryGetComponent<MeshRenderer>(out var rend) && _mode == GerstnerMode.Geometry)
             {
                 rend.enabled = false;
 #if UNITY_EDITOR
                 // Cleanup render proxy used for global mode after switching.
                 if (_renderProxy != null)
                 {
-                    DestroyImmediate(_renderProxy);
+                    Helpers.Destroy(_renderProxy);
                 }
 #endif
             }
@@ -333,11 +330,7 @@ namespace Crest
                 {
                     // Create a proxy MeshRenderer to feed the rendering
                     _renderProxy = GameObject.CreatePrimitive(PrimitiveType.Quad);
-#if UNITY_EDITOR
-                    DestroyImmediate(_renderProxy.GetComponent<Collider>());
-#else
-                    Destroy(_renderProxy.GetComponent<Collider>());
-#endif
+                    Helpers.Destroy(_renderProxy.GetComponent<Collider>());
                     _renderProxy.hideFlags = HideFlags.HideAndDontSave;
                     _renderProxy.transform.parent = transform;
                     rend = _renderProxy.GetComponent<MeshRenderer>();
@@ -358,20 +351,21 @@ namespace Crest
                 }
             }
 
-            var registered = RegisterLodDataInputBase.GetRegistrar(typeof(LodDataMgrAnimWaves));
-
 #if UNITY_EDITOR
             // Unregister after switching modes in the editor.
             if (_batches != null)
             {
                 foreach (var batch in _batches)
                 {
-                    registered.Remove(batch);
+                    RegisterLodDataInput<LodDataMgrAnimWaves>.DeregisterInput(batch);
                 }
             }
 #endif
 
             if (rend == null) return;
+
+            var queue = 0;
+            var subQueue = transform.GetSiblingIndex();
 
             _batches = new GerstnerBatch[LodDataMgr.MAX_LOD_COUNT];
             for (int i = 0; i < _batches.Length; i++)
@@ -385,7 +379,7 @@ namespace Crest
 
             foreach (var batch in _batches)
             {
-                registered.Add(0, batch);
+                RegisterLodDataInput<LodDataMgrAnimWaves>.RegisterInput(batch, queue, subQueue);
             }
         }
 
@@ -562,10 +556,9 @@ namespace Crest
 
             if (_batches != null)
             {
-                var registered = RegisterLodDataInputBase.GetRegistrar(typeof(LodDataMgrAnimWaves));
                 foreach (var batch in _batches)
                 {
-                    registered.Remove(batch);
+                    RegisterLodDataInput<LodDataMgrAnimWaves>.DeregisterInput(batch);
                 }
 
                 _batches = null;
@@ -575,8 +568,7 @@ namespace Crest
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {
-            var mf = GetComponent<MeshFilter>();
-            if (mf)
+            if (TryGetComponent<MeshFilter>(out var mf))
             {
                 Gizmos.color = RegisterAnimWavesInput.s_gizmoColor;
                 Gizmos.DrawWireMesh(mf.sharedMesh, transform.position, transform.rotation, transform.lossyScale);
@@ -847,7 +839,7 @@ namespace Crest
 
 #if UNITY_EDITOR
     [CustomEditor(typeof(ShapeGerstnerBatched)), CanEditMultipleObjects]
-    public class ShapeGerstnerBatchedEditor : ValidatedEditor
+    public class ShapeGerstnerBatchedEditor : CustomBaseEditor
     {
         public override void OnInspectorGUI()
         {
@@ -881,18 +873,9 @@ namespace Crest
             if (_mode == GerstnerMode.Geometry)
             {
                 isValid = ValidatedHelper.ValidateRenderer<MeshRenderer>(gameObject, showMessage, "Crest/Inputs/Animated Waves/Gerstner");
+                ValidatedHelper.ValidateRendererLayer(gameObject, showMessage, ocean);
             }
-            else if (_mode == GerstnerMode.Global && GetComponent<MeshRenderer>() != null)
-            {
-                showMessage
-                (
-                    "The <i>MeshRenderer</i> component will be ignored because the <i>Mode</i> is set to <i>Global</i>.",
-                    "Either remove the <i>MeshRenderer</i> component or set the <i>Mode</i> option to <i>Geometry</i>.",
-                    ValidatedHelper.MessageType.Warning, this
-                );
-            }
-
-            if (_mode == GerstnerMode.Global && GetComponent<MeshRenderer>() != null)
+            else if (_mode == GerstnerMode.Global && TryGetComponent<MeshRenderer>(out _))
             {
                 showMessage
                 (

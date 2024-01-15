@@ -15,10 +15,10 @@ namespace Crest.Spline
     /// <summary>
     /// Simple spline object. Spline points are child GameObjects.
     /// </summary>
-    [ExecuteAlways]
+    [ExecuteDuringEditMode]
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SPLINE + "Spline")]
-    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "wave-conditions.html" + Internal.Constants.HELP_URL_RP + "#wave-splines")]
-    public partial class Spline : MonoBehaviour, ISplinePointCustomDataSetup
+    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "water-inputs.html" + Internal.Constants.HELP_URL_RP + "#spline-mode")]
+    public partial class Spline : CustomMonoBehaviour, ISplinePointCustomDataSetup
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -36,18 +36,31 @@ namespace Crest.Spline
             Right
         }
         [Tooltip("Where generated ribbon should lie relative to spline. If set to Center, ribbon is centered around spline.")]
+        [OnChange(nameof(NotifyOnChange)), DecoratedField]
         public Offset _offset = Offset.Center;
 
         [Tooltip("Connect start and end point to close spline into a loop. Requires at least 3 spline points.")]
+        [OnChange(nameof(NotifyOnChange)), DecoratedField]
         public bool _closed = false;
 
-        [SerializeField]
+        [SerializeField, DecoratedField, OnChange(nameof(NotifyOnChange))]
         float _radius = 20f;
-        [SerializeField, UnityEngine.Delayed]
+
+        [SerializeField, Delayed, OnChange(nameof(NotifyOnChange))]
         int _subdivisions = 1;
 
         public float Radius => _radius;
         public int Subdivisions => _subdivisions;
+
+        void NotifyOnChange()
+        {
+#if UNITY_EDITOR
+            foreach (var receiver in transform.GetComponents<IReceiveSplineChangeMessages>())
+            {
+                receiver.OnSplineChange();
+            }
+#endif
+        }
 
         public bool AttachDataToSplinePoint(GameObject splinePoint)
         {
@@ -181,7 +194,7 @@ namespace Crest.Spline
     }
 
     [CustomEditor(typeof(Spline))]
-    public class SplineEditor : ValidatedEditor
+    public class SplineEditor : CustomBaseEditor
     {
         public override void OnInspectorGUI()
         {

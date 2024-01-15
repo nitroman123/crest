@@ -17,12 +17,27 @@ half3 _CrestAmbientLighting;
 
 float4 _CameraDepthTexture_TexelSize;
 
+#if defined(_APPLYNORMALMAPPING_ON) || defined(_CAUSTICS_ON)
+Texture2D _Normals;
+SamplerState sampler_Normals;
+#endif
+
+#if _FOAM_ON
+Texture2D _FoamTexture;
+SamplerState sampler_FoamTexture;
+#endif
+
+#if _CAUSTICS_ON
+Texture2D _CausticsTexture;
+SamplerState sampler_CausticsTexture;
+#endif
+
 TEXTURE2D_X(_CrestScreenSpaceShadowTexture);
 float4 _CrestScreenSpaceShadowTexture_TexelSize;
 
-sampler2D _ReflectionTex;
+TEXTURE2D(_ReflectionTex); SAMPLER(sampler_ReflectionTex);
 #if _OVERRIDEREFLECTIONCUBEMAP_ON
-samplerCUBE _ReflectionCubemapOverride;
+TEXTURECUBE(_ReflectionCubemapOverride); SAMPLER(sampler_ReflectionCubemapOverride);
 #endif
 
 /////////////////////////////
@@ -54,9 +69,6 @@ half4 _DepthFogDensity;
 // ----------------------------------------------------------------------------
 
 #if defined(_APPLYNORMALMAPPING_ON) || defined(_CAUSTICS_ON)
-// NOTE: _Normals is used outside of _APPLYNORMALMAPPING_ON so we cannot surround it here.
-Texture2D _Normals;
-SamplerState sampler_Normals;
 float4 _Normals_TexelSize;
 #endif
 
@@ -109,6 +121,7 @@ half _DirectionalLightFallOffFar;
 
 #if _PLANARREFLECTIONS_ON
 half _PlanarReflectionNormalsStrength;
+half _PlanarReflectionDistanceFactor;
 half _PlanarReflectionIntensity;
 #endif
 
@@ -139,8 +152,6 @@ half4 _FoamBubbleColor;
 half _FoamBubbleParallax;
 half _WaveFoamBubblesCoverage;
 
-Texture2D _FoamTexture;
-SamplerState sampler_FoamTexture;
 float4 _FoamTexture_TexelSize;
 
 static const WaveHarmonic::Crest::TiledTexture _FoamTiledTexture =
@@ -160,8 +171,6 @@ half _CausticsDepthOfField;
 half _CausticsDistortionScale;
 half _CausticsDistortionStrength;
 
-Texture2D _CausticsTexture;
-SamplerState sampler_CausticsTexture;
 float4 _CausticsTexture_TexelSize;
 
 static const WaveHarmonic::Crest::TiledTexture _CausticsTiledTexture =

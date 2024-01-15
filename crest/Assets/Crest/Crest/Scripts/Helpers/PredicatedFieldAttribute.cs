@@ -5,11 +5,8 @@
 using System;
 using UnityEngine;
 using System.Reflection;
-
-#if UNITY_EDITOR
 using Crest.EditorHelpers;
 using UnityEditor;
-#endif
 
 namespace Crest
 {
@@ -106,7 +103,7 @@ namespace Crest
             {
                 result = prop.enumValueIndex != ((int?)_disableIfValueIs ?? 0);
             }
-            else if (prop.type.StartsWith("PPtr"))
+            else if (prop.type.StartsWithNoAlloc("PPtr"))
             {
                 result = prop.objectReferenceValue != null;
             }
@@ -136,7 +133,7 @@ namespace Crest
             if (_type != null)
             {
                 // Static is both abstract and sealed: https://stackoverflow.com/a/1175950
-                object @object = _type.IsAbstract && _type.IsSealed ? null : Convert.ChangeType(property.serializedObject.targetObject, _type);
+                object @object = _type.IsAbstract && _type.IsSealed ? null : property.serializedObject.targetObject;
                 enabled = (bool) _method.Invoke(@object, new object[] { property.serializedObject.targetObject });
                 if (_inverted) enabled = !enabled;
             }

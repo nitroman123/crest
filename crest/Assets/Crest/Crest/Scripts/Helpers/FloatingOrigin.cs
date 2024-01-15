@@ -20,9 +20,7 @@
 
 using System.Collections;
 using UnityEngine;
-#if CREST_DEBUG
 using UnityEngine.Experimental.Rendering;
-#endif
 
 namespace Crest
 {
@@ -41,8 +39,8 @@ namespace Crest
     /// script should normally be attached to the viewpoint, typically the main camera.
     /// </summary>
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SCRIPTS + "Floating Origin")]
-    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "other-features.html" + Internal.Constants.HELP_URL_RP + "#floating-origin")]
-    public class FloatingOrigin : MonoBehaviour
+    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "open-worlds.html" + Internal.Constants.HELP_URL_RP + "#floating-origin")]
+    public class FloatingOrigin : CustomMonoBehaviour
     {
         const string k_Keyword = "CREST_FLOATING_ORIGIN";
 
@@ -188,12 +186,16 @@ namespace Crest
             }
         }
 
-        void OnValidate()
+#if UNITY_EDITOR
+        protected override void OnValidate()
         {
+            base.OnValidate();
+
             // Must be power of two to avoid popping.
             _threshold = Mathf.Pow(2f, Mathf.Round(Mathf.Log(_threshold, 2f)));
             _threshold = Mathf.Max(_threshold, k_MinimumThreshold);
         }
+#endif
 
         void OnEnable()
         {
@@ -213,11 +215,13 @@ namespace Crest
                 Debug.Log($"Crest.FloatingOrigin.MoveOrigin({newOrigin})");
             }
 
+#if CREST_DEBUG
             if (_debug._captureOnShift && ExternalGPUProfiler.IsAttached())
             {
                 ExternalGPUProfiler.BeginGPUCapture();
                 _debug._isCapturing = true;
             }
+#endif
 
             TeleportOriginThisFrame = newOrigin;
             HasTeleportedThisFrame = true;
@@ -234,7 +238,7 @@ namespace Crest
         /// </summary>
         void MoveOriginTransforms(Vector3 newOrigin)
         {
-            var transforms = (_overrideTransformList != null && _overrideTransformList.Length > 0) ? _overrideTransformList : FindObjectsOfType<Transform>();
+            var transforms = (_overrideTransformList != null && _overrideTransformList.Length > 0) ? _overrideTransformList : FindObjectsByType<Transform>(FindObjectsSortMode.None);
             foreach (var t in transforms)
             {
                 if (t.parent == null)
@@ -249,7 +253,7 @@ namespace Crest
         /// </summary>
         void MoveOriginParticles(Vector3 newOrigin)
         {
-            var pss = (_overrideParticleSystemList != null && _overrideParticleSystemList.Length > 0) ? _overrideParticleSystemList : FindObjectsOfType<ParticleSystem>();
+            var pss = (_overrideParticleSystemList != null && _overrideParticleSystemList.Length > 0) ? _overrideParticleSystemList : FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None);
             foreach (var sys in pss)
             {
                 if (sys.main.simulationSpace != ParticleSystemSimulationSpace.World) continue;
@@ -305,7 +309,7 @@ namespace Crest
                 }
 
                 // Gerstner components
-                var gerstners = _overrideGerstnerList != null && _overrideGerstnerList.Length > 0 ? _overrideGerstnerList : FindObjectsOfType<ShapeGerstnerBatched>();
+                var gerstners = _overrideGerstnerList != null && _overrideGerstnerList.Length > 0 ? _overrideGerstnerList : FindObjectsByType<ShapeGerstnerBatched>(FindObjectsSortMode.None);
                 foreach (var gerstner in gerstners)
                 {
                     gerstner.SetOrigin(newOrigin);
@@ -321,7 +325,7 @@ namespace Crest
             if (_physicsThreshold > 0f)
             {
                 var physicsThreshold2 = _physicsThreshold * _physicsThreshold;
-                var rbs = (_overrideRigidbodyList != null && _overrideRigidbodyList.Length > 0) ? _overrideRigidbodyList : FindObjectsOfType<Rigidbody>();
+                var rbs = (_overrideRigidbodyList != null && _overrideRigidbodyList.Length > 0) ? _overrideRigidbodyList : FindObjectsByType<Rigidbody>(FindObjectsSortMode.None);
                 foreach (var rb in rbs)
                 {
                     if (rb.gameObject.transform.position.sqrMagnitude > physicsThreshold2)
@@ -366,10 +370,19 @@ namespace Crest.CrestEditor
     using UnityEditor;
 
     [CustomEditor(typeof(FloatingOrigin))]
-    class FloatingOriginEditor : Editor
+    class FloatingOriginEditor : CustomBaseEditor
     {
         public override void OnInspectorGUI()
         {
+            EditorGUILayout.Space();
+            EditorGUILayout.HelpBox
+            (
+                "It is recommended to read the documentation on this component (click the (?) button) if you want to " +
+                "change the default threshold value to avoid popping on world shifts.",
+                MessageType.Info
+            );
+            EditorGUILayout.Space();
+
             base.OnInspectorGUI();
 
             var target = this.target as FloatingOrigin;

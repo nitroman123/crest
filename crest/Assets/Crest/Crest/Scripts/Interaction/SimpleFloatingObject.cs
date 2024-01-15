@@ -33,6 +33,8 @@ namespace Crest
         public float _boyancyTorque = 8f;
         [Tooltip("Approximate hydrodynamics of 'surfing' down waves."), Range(0, 1)]
         public float _accelerateDownhill = 0f;
+        [Tooltip("Clamps the buoyancy force to this value. Useful for handling fully submerged objects. Enter 'Infinity' to disable.")]
+        public float _maximumBuoyancyForce = Mathf.Infinity;
 
         [Header("Wave Response")]
         [Tooltip("Diameter of object, for physics purposes. The larger this value, the more filtered/smooth the wave response will be.")]
@@ -110,20 +112,24 @@ namespace Crest
                 return;
             }
 
-            var buoyancy = -Physics.gravity.normalized * _buoyancyCoeff * bottomDepth * bottomDepth * bottomDepth;
+            var buoyancy = _buoyancyCoeff * bottomDepth * bottomDepth * bottomDepth * -Physics.gravity.normalized;
+            if (_maximumBuoyancyForce < Mathf.Infinity)
+            {
+                buoyancy = Vector3.ClampMagnitude(buoyancy, _maximumBuoyancyForce);
+            }
             _rb.AddForce(buoyancy, ForceMode.Acceleration);
 
             // Approximate hydrodynamics of sliding along water
             if (_accelerateDownhill > 0f)
             {
-                _rb.AddForce(new Vector3(normal.x, 0f, normal.z) * -Physics.gravity.y * _accelerateDownhill, ForceMode.Acceleration);
+                _rb.AddForce(_accelerateDownhill * -Physics.gravity.y * new Vector3(normal.x, 0f, normal.z), ForceMode.Acceleration);
             }
 
             // Apply drag relative to water
             var forcePosition = _rb.position + _forceHeightOffset * Vector3.up;
-            _rb.AddForceAtPosition(Vector3.up * Vector3.Dot(Vector3.up, -velocityRelativeToWater) * _dragInWaterUp, forcePosition, ForceMode.Acceleration);
-            _rb.AddForceAtPosition(transform.right * Vector3.Dot(transform.right, -velocityRelativeToWater) * _dragInWaterRight, forcePosition, ForceMode.Acceleration);
-            _rb.AddForceAtPosition(transform.forward * Vector3.Dot(transform.forward, -velocityRelativeToWater) * _dragInWaterForward, forcePosition, ForceMode.Acceleration);
+            _rb.AddForceAtPosition(_dragInWaterUp * Vector3.Dot(Vector3.up, -velocityRelativeToWater) * Vector3.up, forcePosition, ForceMode.Acceleration);
+            _rb.AddForceAtPosition(_dragInWaterRight * Vector3.Dot(transform.right, -velocityRelativeToWater) * transform.right, forcePosition, ForceMode.Acceleration);
+            _rb.AddForceAtPosition(_dragInWaterForward * Vector3.Dot(transform.forward, -velocityRelativeToWater) * transform.forward, forcePosition, ForceMode.Acceleration);
 
             FixedUpdateOrientation(normal);
 

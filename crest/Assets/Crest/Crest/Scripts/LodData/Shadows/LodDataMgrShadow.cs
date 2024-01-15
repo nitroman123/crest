@@ -5,9 +5,6 @@
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
-#if ENABLE_VR && ENABLE_VR_MODULE
-using UnityEngine.XR;
-#endif
 
 namespace Crest
 {
@@ -50,6 +47,7 @@ namespace Crest
         readonly int sp_MainCameraProjectionMatrix = Shader.PropertyToID("_MainCameraProjectionMatrix");
         readonly int sp_SimDeltaTime = Shader.PropertyToID("_SimDeltaTime");
         static readonly int sp_CrestScreenSpaceShadowTexture = Shader.PropertyToID("_CrestScreenSpaceShadowTexture");
+        static readonly int sp_ShadowMapTexture = Shader.PropertyToID("_ShadowMapTexture");
 
         public override SimSettingsBase SettingsBase => Settings;
         public SettingsType Settings => _ocean._simSettingsShadow != null ? _ocean._simSettingsShadow : GetDefaultSettings<SettingsType>();
@@ -76,10 +74,12 @@ namespace Crest
             {
                 _renderMaterial = new PropertyWrapperMaterial[OceanRenderer.Instance.CurrentLodCount];
                 var shaderPath = "Hidden/Crest/Simulation/Update Shadow";
+
                 var shader = Shader.Find(shaderPath);
                 for (int i = 0; i < _renderMaterial.Length; i++)
                 {
                     _renderMaterial[i] = new PropertyWrapperMaterial(shader);
+                    _renderMaterial[i].SetInt(sp_LD_SliceIndex, i);
                 }
             }
 
@@ -113,20 +113,45 @@ namespace Crest
         {
             base.OnEnable();
 
+            Enable();
+        }
+
+        internal override void Enable()
+        {
+            base.Enable();
+
+            {
+                Camera.onPreCull -= OnPreCullCamera;
+                Camera.onPreCull += OnPreCullCamera;
+                Camera.onPostRender -= OnPostRenderCamera;
+                Camera.onPostRender += OnPostRenderCamera;
+            }
+
             CleanUpShadowCommandBuffers();
+        }
+
+        internal override void Disable()
+        {
+            base.Disable();
+
+            CleanUpShadowCommandBuffers();
+
+            {
+                Camera.onPreCull -= OnPreCullCamera;
+                Camera.onPostRender -= OnPostRenderCamera;
+            }
         }
 
         internal override void OnDisable()
         {
             base.OnDisable();
 
-            // Built-in RP only.
-            {
-                // Black for shadows. White for unshadowed.
-                Shader.SetGlobalTexture(sp_CrestScreenSpaceShadowTexture, Texture2D.whiteTexture);
-            }
+            Disable();
 
-            CleanUpShadowCommandBuffers();
+            for (var index = 0; index < _renderMaterial.Length; index++)
+            {
+                Helpers.Destroy(_renderMaterial[index].material);
+            }
         }
 
         protected override void InitData()
@@ -139,6 +164,106 @@ namespace Crest
         {
             base.ClearLodData();
             _targets.RunLambda(buffer => TextureArrayHelpers.ClearToBlack(buffer));
+        }
+
+        void OnPreCullCamera(Camera camera)
+        {
+#if UNITY_EDITOR
+            // Do not execute when editor is not active to conserve power and prevent possible leaks.
+            if (!UnityEditorInternal.InternalEditorUtility.isApplicationActive)
+            {
+                BufCopyShadowMap?.Clear();
+                return;
+            }
+
+            if (!OceanRenderer.IsWithinEditorUpdate)
+            {
+                BufCopyShadowMap?.Clear();
+                return;
+            }
+#endif
+
+            var ocean = OceanRenderer.Instance;
+
+            if (ocean == null)
+            {
+                return;
+            }
+
+            if (!Helpers.MaskIncludesLayer(camera.cullingMask, ocean.Layer))
+            {
+                return;
+            }
+
+            if (camera == ocean.ViewCamera && BufCopyShadowMap != null)
+            {
+                // Calling this in OnPreRender was too late to be executed in the same frame.
+                AddCommandBufferToPrimaryLight();
+
+                // Disable for XR SPI otherwise input will not have correct world position.
+                if (camera.stereoEnabled && XRHelpers.IsSinglePass)
+                {
+                    BufCopyShadowMap.DisableShaderKeyword("STEREO_INSTANCING_ON");
+                }
+
+                BuildCommandBuffer(ocean, BufCopyShadowMap);
+
+                // Restore XR SPI as we cannot rely on remaining pipeline to do it for us.
+                if (camera.stereoEnabled && XRHelpers.IsSinglePass)
+                {
+                    BufCopyShadowMap.EnableShaderKeyword("STEREO_INSTANCING_ON");
+                }
+            }
+        }
+
+        void OnPostRenderCamera(Camera camera)
+        {
+#if UNITY_EDITOR
+            // Do not execute when editor is not active to conserve power and prevent possible leaks.
+            if (!UnityEditorInternal.InternalEditorUtility.isApplicationActive)
+            {
+                BufCopyShadowMap?.Clear();
+                return;
+            }
+
+            if (!OceanRenderer.IsWithinEditorUpdate)
+            {
+                BufCopyShadowMap?.Clear();
+                return;
+            }
+#endif
+
+            var ocean = OceanRenderer.Instance;
+
+            if (ocean == null)
+            {
+                return;
+            }
+
+            if (!Helpers.MaskIncludesLayer(camera.cullingMask, ocean.Layer))
+            {
+                return;
+            }
+
+            if (camera == ocean.ViewCamera)
+            {
+                // CBs added to a light are executed for every camera, but the LOD data is only supports a single
+                // camera. Removing the CB after the camera renders restricts the CB to one camera.
+                RemoveCommandBufferFromPrimaryLight();
+            }
+        }
+
+        internal void AddCommandBufferToPrimaryLight()
+        {
+            if (_mainLight == null || BufCopyShadowMap == null) return;
+            _mainLight.RemoveCommandBuffer(LightEvent.BeforeScreenspaceMask, BufCopyShadowMap);
+            _mainLight.AddCommandBuffer(LightEvent.BeforeScreenspaceMask, BufCopyShadowMap);
+        }
+
+        internal void RemoveCommandBufferFromPrimaryLight()
+        {
+            if (_mainLight == null || BufCopyShadowMap == null) return;
+            _mainLight.RemoveCommandBuffer(LightEvent.BeforeScreenspaceMask, BufCopyShadowMap);
         }
 
         /// <summary>
@@ -233,11 +358,9 @@ namespace Crest
         void SetUpShadowCommandBuffers()
         {
             BufCopyShadowMap = new CommandBuffer();
-            BufCopyShadowMap.name = "Shadow data";
+            BufCopyShadowMap.name = "Crest Shadow Data";
 
             {
-                _mainLight.AddCommandBuffer(LightEvent.BeforeScreenspaceMask, BufCopyShadowMap);
-
                 // Call this regardless of rendering path as it has no negative consequences for forward.
                 SetUpDeferredShadows();
                 SetUpScreenSpaceShadows();
@@ -248,7 +371,6 @@ namespace Crest
         {
             if (BufCopyShadowMap != null)
             {
-                if (_mainLight != null) _mainLight.RemoveCommandBuffer(LightEvent.BeforeScreenspaceMask, BufCopyShadowMap);
                 BufCopyShadowMap.Release();
                 BufCopyShadowMap = null;
             }
@@ -283,7 +405,7 @@ namespace Crest
             {
                 name = "Deferred Shadow Data"
             };
-            _deferredShadowMapCommandBuffer.SetGlobalTexture("_ShadowMapTexture", BuiltinRenderTextureType.CurrentActive);
+            _deferredShadowMapCommandBuffer.SetGlobalTexture(sp_ShadowMapTexture, BuiltinRenderTextureType.CurrentActive);
             _mainLight.AddCommandBuffer(LightEvent.AfterShadowMap, _deferredShadowMapCommandBuffer);
         }
 
@@ -293,11 +415,6 @@ namespace Crest
             if (_mainLight != null) _mainLight.RemoveCommandBuffer(LightEvent.AfterShadowMap, _deferredShadowMapCommandBuffer);
             _deferredShadowMapCommandBuffer.Release();
             _deferredShadowMapCommandBuffer = null;
-        }
-
-        public override void BuildCommandBuffer(OceanRenderer ocean, CommandBuffer buf)
-        {
-            // Intentionally blank to not flip buffers.
         }
 
         public override void UpdateLodData()
@@ -348,22 +465,22 @@ namespace Crest
             {
                 TextureArrayHelpers.ClearToBlack(_targets.Current);
             }
+        }
+
+        public override void BuildCommandBuffer(OceanRenderer ocean, CommandBuffer buffer)
+        {
+            // NOTE: Base call will flip buffers which is done elsewhere for this simulation.
 
             // Cache the camera for further down.
-            var camera = OceanRenderer.Instance.ViewCamera;
-            if (camera == null)
-            {
-                // We want to return early after clear.
-                return;
-            }
+            var camera = ocean.ViewCamera;
 
 #if CREST_SRP
 #pragma warning disable 618
-            using (new ProfilingSample(BufCopyShadowMap, "CrestSampleShadows"))
+            using (new ProfilingSample(buffer, "CrestSampleShadows"))
 #pragma warning restore 618
 #endif
             {
-                var lt = OceanRenderer.Instance._lodTransform;
+                var lt = ocean._lodTransform;
                 for (var lodIdx = lt.LodCount - 1; lodIdx >= 0; lodIdx--)
                 {
 #if UNITY_EDITOR
@@ -371,42 +488,33 @@ namespace Crest
 #endif
 
                     _renderMaterial[lodIdx].SetVector(sp_CenterPos, lt._renderData[lodIdx].Current._posSnapped);
-                    var scale = OceanRenderer.Instance.CalcLodScale(lodIdx);
+                    var scale = ocean.CalcLodScale(lodIdx);
                     _renderMaterial[lodIdx].SetVector(sp_Scale, new Vector3(scale, 1f, scale));
                     _renderMaterial[lodIdx].SetVector(sp_JitterDiameters_CurrentFrameWeights, new Vector4(Settings._jitterDiameterSoft, Settings._jitterDiameterHard, Settings._currentFrameWeightSoft, Settings._currentFrameWeightHard));
                     _renderMaterial[lodIdx].SetMatrix(sp_MainCameraProjectionMatrix, GL.GetGPUProjectionMatrix(camera.projectionMatrix, renderIntoTexture: true) * camera.worldToCameraMatrix);
                     _renderMaterial[lodIdx].SetFloat(sp_SimDeltaTime, Time.deltaTime);
 
-                    _renderMaterial[lodIdx].SetInt(sp_LD_SliceIndex, lodIdx);
                     _renderMaterial[lodIdx].SetTexture(GetParamIdSampler(true), _targets.Previous(1));
+
+#if UNITY_EDITOR
+                    // On recompiles this becomes unset even though we run over the code path to set it again...
+                    _renderMaterial[lodIdx].material.SetInt(LodDataMgr.sp_LD_SliceIndex, lodIdx);
+#endif
 
                     LodDataMgrSeaFloorDepth.Bind(_renderMaterial[lodIdx]);
 
-                    BufCopyShadowMap.Blit(Texture2D.blackTexture, _targets.Current, _renderMaterial[lodIdx].material, -1, lodIdx);
+                    Helpers.Blit(buffer, new RenderTargetIdentifier(_targets.Current, 0, CubemapFace.Unknown, lodIdx), _renderMaterial[lodIdx].material, -1);
                 }
-
-#if ENABLE_VR && ENABLE_VR_MODULE
-                // Disable for XR SPI otherwise input will not have correct world position.
-                if (XRSettings.enabled && XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassInstanced)
-                {
-                    BufCopyShadowMap.DisableShaderKeyword("STEREO_INSTANCING_ON");
-                }
-#endif
 
                 // Process registered inputs.
                 for (var lodIdx = lt.LodCount - 1; lodIdx >= 0; lodIdx--)
                 {
-                    BufCopyShadowMap.SetRenderTarget(_targets.Current, _targets.Current.depthBuffer, 0, CubemapFace.Unknown, lodIdx);
-                    SubmitDraws(lodIdx, BufCopyShadowMap);
+                    buffer.SetGlobalInt(sp_LD_SliceIndex, lodIdx);
+                    buffer.SetRenderTarget(_targets.Current, _targets.Current.depthBuffer, 0, CubemapFace.Unknown, lodIdx);
+                    // BUG: These draw calls will "leak" and be duplicated before the above blit. They are executed at
+                    // the beginning of this CB before any commands are applied.
+                    SubmitDraws(lodIdx, buffer);
                 }
-
-#if ENABLE_VR && ENABLE_VR_MODULE
-                // Restore XR SPI as we cannot rely on remaining pipeline to do it for us.
-                if (XRSettings.enabled && XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassInstanced)
-                {
-                    BufCopyShadowMap.EnableShaderKeyword("STEREO_INSTANCING_ON");
-                }
-#endif
 
                 // Set the target texture as to make sure we catch the 'pong' each frame
                 Shader.SetGlobalTexture(GetParamIdSampler(), _targets.Current);
@@ -449,14 +557,20 @@ namespace Crest
         public static void BindNullToGraphicsShaders()
         {
             Shader.SetGlobalTexture(ParamIdSampler(), s_nullTexture);
+        }
 
-            // Built-in RP only.
+        public static void BindScreenSpaceNullToGraphicsShaders(Camera camera)
+        {
+            // Black for shadowed. White for unshadowed. Built-in RP only.
+            if (camera.stereoEnabled && XRHelpers.IsSinglePass)
             {
-                // Black for shadows. White for unshadowed.
+                Shader.SetGlobalTexture(sp_CrestScreenSpaceShadowTexture, XRHelpers.WhiteTexture);
+            }
+            else
+            {
                 Shader.SetGlobalTexture(sp_CrestScreenSpaceShadowTexture, Texture2D.whiteTexture);
             }
         }
-
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void InitStatics()

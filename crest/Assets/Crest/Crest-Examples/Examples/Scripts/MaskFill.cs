@@ -10,8 +10,8 @@ namespace Crest.Examples
     using UnityEngine;
     using UnityEngine.Rendering;
 
-    [ExecuteAlways]
-    public class MaskFill : MonoBehaviour
+    [ExecuteDuringEditMode]
+    public class MaskFill : CustomMonoBehaviour
     {
         [SerializeField]
         [Tooltip("Masked meshes that need filling. Can provide non masked meshes to build a fill mask for open meshes as it uses the back faces.")]
@@ -61,7 +61,7 @@ namespace Crest.Examples
                 _texture.descriptor = descriptor;
             }
 
-            buffer.SetRenderTarget(_target);
+            Helpers.SetRenderTarget(buffer, _target);
             buffer.ClearRenderTarget(true, true, Color.black);
             buffer.SetGlobalTexture(ShaderIDs.s_FillTexture, _target);
 
@@ -91,7 +91,7 @@ namespace Crest.Examples
         {
             if (_texture != null && _texture.IsCreated())
             {
-                buffer.SetRenderTarget(_target);
+                Helpers.SetRenderTarget(buffer, _target);
                 buffer.ClearRenderTarget(true, true, Color.black);
             }
 

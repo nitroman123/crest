@@ -3,9 +3,7 @@
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
 using System.Collections.Generic;
-#if UNITY_EDITOR
 using UnityEditor;
-#endif
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -15,10 +13,10 @@ namespace Crest
     /// Demarcates an AABB area where water is present in the world. If present, ocean tiles will be
     /// culled if they don't overlap any WaterBody.
     /// </summary>
-    [ExecuteAlways]
+    [ExecuteDuringEditMode]
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_SCRIPTS + "Water Body")]
     [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "water-bodies.html")]
-    public partial class WaterBody : MonoBehaviour
+    public partial class WaterBody : CustomMonoBehaviour
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -57,6 +55,7 @@ namespace Crest
             // Render to all cascades
             public float Wavelength => 0f;
             public bool Enabled => true;
+            public bool IgnoreTransitionWeight => false;
 
             public Matrix4x4 _transform;
 
@@ -92,7 +91,7 @@ namespace Crest
 
             if (_clipInput != null)
             {
-                RegisterLodDataInputBase.GetRegistrar(typeof(LodDataMgrClipSurface)).Remove(_clipInput);
+                RegisterLodDataInput<LodDataMgrClipSurface>.DeregisterInput(_clipInput);
 
                 _clipInput = null;
             }
@@ -122,12 +121,11 @@ namespace Crest
                 {
                     _clipInput = new ClipInput(this);
 
-                    var registrar = RegisterLodDataInputBase.GetRegistrar(typeof(LodDataMgrClipSurface));
-                    registrar.Add(0, _clipInput);
+                    RegisterLodDataInput<LodDataMgrClipSurface>.RegisterInput(_clipInput, 0, transform.GetSiblingIndex());
                 }
                 else
                 {
-                    RegisterLodDataInputBase.GetRegistrar(typeof(LodDataMgrClipSurface)).Remove(_clipInput);
+                    RegisterLodDataInput<LodDataMgrClipSurface>.DeregisterInput(_clipInput);
 
                     _clipInput = null;
                 }
@@ -188,7 +186,10 @@ namespace Crest
             var oldColor = Gizmos.color;
             Gizmos.color = new Color(1f, 1f, 1f, 0.5f);
             var center = AABB.center;
-            Gizmos.DrawCube(center, 2f * new Vector3(AABB.extents.x, 1f, AABB.extents.z));
+            var size = 2f * new Vector3(AABB.extents.x, 1f, AABB.extents.z);
+            Gizmos.DrawCube(center, size);
+            Gizmos.color = Color.white;
+            Gizmos.DrawWireCube(center, size);
             Gizmos.color = oldColor;
         }
 #endif
@@ -199,6 +200,8 @@ namespace Crest
     {
         public bool Validate(OceanRenderer ocean, ValidatedHelper.ShowMessage showMessage)
         {
+            var isValid = true;
+
             // This will also return disabled objects. Safe to use in this case.
             if (Resources.FindObjectsOfTypeAll<OceanRenderer>().Length == 0)
             {
@@ -209,7 +212,7 @@ namespace Crest
                     ValidatedHelper.MessageType.Error, this
                 );
 
-                return false;
+                isValid = false;
             }
 
             if (Mathf.Abs(transform.lossyScale.x) < 2f && Mathf.Abs(transform.lossyScale.z) < 2f)
@@ -221,24 +224,13 @@ namespace Crest
                     ValidatedHelper.MessageType.Error, this
                 );
 
-                return false;
+                isValid = false;
             }
 
-            if (transform.eulerAngles.magnitude > 0.0001f)
-            {
-                showMessage
-                (
-                    $"There must be no rotation on the water body GameObject, and no rotation on any parent. Currently the rotation Euler angles are {transform.eulerAngles}.",
-                    "Reset the rotations on this GameObject and all parents to 0.",
-                    ValidatedHelper.MessageType.Error, this
-                );
-            }
+            isValid = isValid && ValidatedHelper.ValidateNoRotation(this, transform, showMessage);
 
-            return true;
+            return isValid;
         }
     }
-
-    [CustomEditor(typeof(WaterBody), true), CanEditMultipleObjects]
-    class WaterBodyEditor : ValidatedEditor { }
 #endif
 }

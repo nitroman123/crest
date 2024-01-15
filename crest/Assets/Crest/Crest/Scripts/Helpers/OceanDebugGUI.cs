@@ -2,18 +2,20 @@
 
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
+#if CREST_UNITY_INPUT && ENABLE_INPUT_SYSTEM
+#define INPUT_SYSTEM_ENABLED
+#endif
+
 using System.Collections.Generic;
 using UnityEngine;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-#endif
 using UnityEngine.SceneManagement;
 
 namespace Crest
 {
-    [ExecuteAlways]
+    [ExecuteDuringEditMode]
     [AddComponentMenu(Internal.Constants.MENU_PREFIX_DEBUG + "Ocean Debug GUI")]
-    public class OceanDebugGUI : MonoBehaviour
+    public class OceanDebugGUI : CustomMonoBehaviour
     {
         /// <summary>
         /// The version of this asset. Can be used to migrate across versions. This value should
@@ -48,9 +50,24 @@ namespace Crest
         readonly static float _bottomPanelHeight = 25f;
         readonly static Color _guiColor = Color.black * 0.7f;
 
+        public static class ShaderIDs
+        {
+            public static readonly int s_Depth = Shader.PropertyToID("_Depth");
+            public static readonly int s_Scale = Shader.PropertyToID("_Scale");
+            public static readonly int s_Bias = Shader.PropertyToID("_Bias");
+        }
+
         static readonly Dictionary<System.Type, string> s_simNames = new Dictionary<System.Type, string>();
 
-        static Dictionary<RenderTexture, Material> s_textureArrayMaterials = new Dictionary<RenderTexture, Material>();
+        static Material s_DebugArrayMaterial;
+        static Material DebugArrayMaterial
+        {
+            get
+            {
+                if (s_DebugArrayMaterial == null) s_DebugArrayMaterial = new Material(Shader.Find("Hidden/Crest/Debug/TextureArray"));
+                return s_DebugArrayMaterial;
+            }
+        }
 
         static OceanDebugGUI s_Instance;
 
@@ -92,6 +109,12 @@ namespace Crest
             s_Instance = null;
         }
 
+        void OnDestroy()
+        {
+            // Safe as there should only be one instance at a time.
+            Helpers.Destroy(s_DebugArrayMaterial);
+        }
+
         Vector3 _viewerPosLastFrame;
         Vector3 _viewerVel;
 
@@ -114,7 +137,7 @@ namespace Crest
                 return;
             }
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM_ENABLED
             if (Keyboard.current.gKey.wasPressedThisFrame)
 #else
             if (Input.GetKeyDown(KeyCode.G))
@@ -122,7 +145,7 @@ namespace Crest
             {
                 ToggleGUI();
             }
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM_ENABLED
             if (Keyboard.current.fKey.wasPressedThisFrame)
 #else
             if (Input.GetKeyDown(KeyCode.F))
@@ -130,7 +153,7 @@ namespace Crest
             {
                 Time.timeScale = Time.timeScale == 0f ? 1f : 0f;
             }
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM_ENABLED
             if (Keyboard.current.rKey.wasPressedThisFrame)
 #else
             if (Input.GetKeyDown(KeyCode.R))
@@ -389,18 +412,11 @@ namespace Crest
                         float y = idx * h;
                         if (isRightmost) w += b;
 
-                        s_textureArrayMaterials.TryGetValue(lodData.DataTexture, out var material);
-                        if (material == null)
-                        {
-                            material = new Material(Shader.Find("Hidden/Crest/Debug/TextureArray"));
-                            s_textureArrayMaterials.Add(lodData.DataTexture, material);
-                        }
-
                         // Render specific slice of 2D texture array
-                        material.SetInt("_Depth", idx);
-                        material.SetFloat("_Scale", scale);
-                        material.SetFloat("_Bias", bias);
-                        Graphics.DrawTexture(new Rect(x + b, (y + b / 2f) - scroll, h - b, h - b), lodData.DataTexture, material);
+                        DebugArrayMaterial.SetInt(ShaderIDs.s_Depth, idx);
+                        DebugArrayMaterial.SetFloat(ShaderIDs.s_Scale, scale);
+                        DebugArrayMaterial.SetFloat(ShaderIDs.s_Bias, bias);
+                        Graphics.DrawTexture(new Rect(x + b, (y + b / 2f) - scroll, h - b, h - b), lodData.DataTexture, DebugArrayMaterial);
                     }
                 }
             }
@@ -434,18 +450,11 @@ namespace Crest
                         float y = idx * h;
                         if (offset == 1f) w += b;
 
-                        s_textureArrayMaterials.TryGetValue(data, out var material);
-                        if (material == null)
-                        {
-                            material = new Material(Shader.Find("Hidden/Crest/Debug/TextureArray"));
-                            s_textureArrayMaterials.Add(data, material);
-                        }
-
                         // Render specific slice of 2D texture array
-                        material.SetInt("_Depth", idx);
-                        material.SetFloat("_Scale", scale);
-                        material.SetFloat("_Bias", bias);
-                        Graphics.DrawTexture(new Rect(x + b, y + b / 2f, h - b, h - b), data, material);
+                        DebugArrayMaterial.SetInt(ShaderIDs.s_Depth, idx);
+                        DebugArrayMaterial.SetFloat(ShaderIDs.s_Scale, scale);
+                        DebugArrayMaterial.SetFloat(ShaderIDs.s_Bias, bias);
+                        Graphics.DrawTexture(new Rect(x + b, y + b / 2f, h - b, h - b), data, DebugArrayMaterial);
                     }
                 }
             }
@@ -461,7 +470,6 @@ namespace Crest
         {
             // Init here from 2019.3 onwards
             s_simNames.Clear();
-            s_textureArrayMaterials.Clear();
         }
     }
 }

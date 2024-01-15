@@ -104,9 +104,9 @@ Shader "Crest/Underwater Curtain"
 				//   up to cover the whole screen, but it only needs to get pushed up to the horizon level to meet the water surface
 
 				// view coordinate frame for camera
-				const float3 right   = unity_CameraToWorld._11_21_31;
-				const float3 up      = unity_CameraToWorld._12_22_32;
-				const float3 forward = unity_CameraToWorld._13_23_33;
+				const float3 right   = UNITY_MATRIX_I_V._11_21_31;
+				const float3 up      = UNITY_MATRIX_I_V._12_22_32;
+				const float3 forward = -UNITY_MATRIX_I_V._13_23_33;
 
 				const float3 nearPlaneCenter = _WorldSpaceCameraPos + forward * _ProjectionParams.y * 1.001;
 				// Spread verts across the near plane.
@@ -213,14 +213,14 @@ Shader "Crest/Underwater Curtain"
 				}
 #endif // _SUBSURFACESHALLOWCOLOUR_ON
 
-				const half3 scatterCol = ScatterColour(seaFloorDepth, shadow, sss, view, WaveHarmonic::Crest::AmbientLight(), lightDir, lightCol, true);
+				const half3 scatterCol = ScatterColour(seaFloorDepth, shadow, sss, view, _CrestAmbientLighting, lightDir, lightCol, true);
 
 				half3 sceneColour = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_BackgroundTexture, input.grabPos.xy / input.grabPos.w).rgb;
 
 #if _CAUSTICS_ON
 				if (sceneZ01 != 0.0)
 				{
-					float3 scenePos = _WorldSpaceCameraPos - view * sceneZ / dot(unity_CameraToWorld._m02_m12_m22, -view);
+					float3 scenePos = _WorldSpaceCameraPos - view * sceneZ / dot(UNITY_MATRIX_I_V._13_23_33, view);
 					ApplyCaustics(_CausticsTiledTexture, _CausticsDistortionTiledTexture, input.positionCS.xy, scenePos, lightDir, sceneZ, true, sceneColour, _LD_SliceIndex + 1, cascadeData1);
 				}
 #endif // _CAUSTICS_ON

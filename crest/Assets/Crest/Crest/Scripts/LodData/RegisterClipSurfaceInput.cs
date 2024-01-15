@@ -2,6 +2,7 @@
 
 // This file is subject to the MIT License as seen in the root of this folder structure (LICENSE)
 
+using Crest.Internal;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -13,7 +14,7 @@ namespace Crest
     /// clip the surface of the ocean.
     /// </summary>
     [AddComponentMenu(MENU_PREFIX + "Clip Surface Input")]
-    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "ocean-simulation.html" + Internal.Constants.HELP_URL_RP + "#clip-surface")]
+    [HelpURL(Internal.Constants.HELP_URL_BASE_USER + "clipping.html" + Internal.Constants.HELP_URL_RP + "#clip-surface")]
     public partial class RegisterClipSurfaceInput : RegisterLodDataInput<LodDataMgrClipSurface>
     {
         /// <summary>
@@ -142,7 +143,6 @@ namespace Crest
             if (_signedDistancedMaterial == null)
             {
                 _signedDistancedMaterial = new Material(Shader.Find(k_SignedDistanceShaderPath));
-                _signedDistancedMaterial.hideFlags = HideFlags.HideAndDontSave;
             }
 
             // Could refactor using hashy.
@@ -177,7 +177,6 @@ namespace Crest
             }
 
             buf.SetGlobalFloat(sp_Weight, weight);
-            buf.SetGlobalFloat(LodDataMgr.sp_LD_SliceIndex, lodIdx);
             buf.SetGlobalVector(sp_DisplacementAtInputPosition, Vector3.zero);
 
             if (_mode == Mode.Primitive)
@@ -208,8 +207,10 @@ namespace Crest
             }
         }
 
-        private void LateUpdate()
+        protected override void LateUpdate()
         {
+            base.LateUpdate();
+
             if (OceanRenderer.Instance == null || (_mode == Mode.Geometry && _renderer == null))
             {
                 return;
@@ -239,39 +240,31 @@ namespace Crest
                 _enabled = true;
             }
 
-            // find which lod this object is overlapping
-            var rect = new Rect(transform.position.x, transform.position.z, 0f, 0f);
-            var lodIdx = LodDataMgrAnimWaves.SuggestDataLOD(rect);
-
-            if (lodIdx > -1)
+            // Need this here or will see NullReferenceException on recompile.
+            if (_mpb == null)
             {
-                // Need this here or will see NullReferenceException on recompile.
-                if (_mpb == null)
-                {
-                    _mpb = new PropertyWrapperMPB();
-                }
+                _mpb = new PropertyWrapperMPB();
+            }
 
-                if (_mode == Mode.Geometry)
-                {
-                    _renderer.GetPropertyBlock(_mpb.materialPropertyBlock);
-                }
-                else
-                {
-                    _signedDistancedMaterial.SetKeyword("_INVERTED", _inverted);
-                    _signedDistancedMaterial.SetInt(sp_BlendOp, (int)(_inverted ? BlendOp.Min : BlendOp.Max));
-                }
+            if (_mode == Mode.Geometry)
+            {
+                _renderer.GetPropertyBlock(_mpb.materialPropertyBlock);
+            }
+            else
+            {
+                _signedDistancedMaterial.SetKeyword("_INVERTED", _inverted);
+                _signedDistancedMaterial.SetInt(sp_BlendOp, (int)(_inverted ? BlendOp.Min : BlendOp.Max));
+            }
 
-                _mpb.SetInt(LodDataMgr.sp_LD_SliceIndex, lodIdx);
-                _mpb.SetInt(sp_DisplacementSamplingIterations, (int)_animatedWavesDisplacementSamplingIterations);
+            _mpb.SetInt(sp_DisplacementSamplingIterations, (int)_animatedWavesDisplacementSamplingIterations);
 
-                if (_mode == Mode.Geometry)
-                {
-                    _renderer.SetPropertyBlock(_mpb.materialPropertyBlock);
-                }
-                else
-                {
-                    _mpb.SetMatrix(sp_SignedDistanceShapeMatrix, Matrix4x4.TRS(transform.position, transform.rotation, transform.lossyScale).inverse);
-                }
+            if (_mode == Mode.Geometry)
+            {
+                _renderer.SetPropertyBlock(_mpb.materialPropertyBlock);
+            }
+            else
+            {
+                _mpb.SetMatrix(sp_SignedDistanceShapeMatrix, Matrix4x4.TRS(transform.position, transform.rotation, transform.lossyScale).inverse);
             }
         }
 

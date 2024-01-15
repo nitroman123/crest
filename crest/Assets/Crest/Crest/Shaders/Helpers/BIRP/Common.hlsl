@@ -1,6 +1,12 @@
 // Crest Ocean System
 
+// This file is subject to the Unity Companion License:
+// https://github.com/Unity-Technologies/Graphics/blob/7ff8fd444c179fd9bb380d61f4865be6935b47dd/LICENSE.md
+
 // Adds functions from SRP.
+
+// Adapted from:
+// https://github.com/Unity-Technologies/Graphics/blob/8f54e6591e93fb3bf8e9879a0e43665dfbe2f629/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl
 
 #ifndef UNITY_COMMON_INCLUDED
 #define UNITY_COMMON_INCLUDED
@@ -44,7 +50,7 @@
 
 #define TEXTURE2D(textureName)                Texture2D textureName
 #define TEXTURE2D_ARRAY(textureName)          Texture2DArray textureName
-// #define TEXTURECUBE(textureName)              TextureCube textureName
+#define TEXTURECUBE(textureName)              TextureCube textureName
 // #define TEXTURECUBE_ARRAY(textureName)        TextureCubeArray textureName
 // #define TEXTURE3D(textureName)                Texture3D textureName
 
@@ -121,7 +127,7 @@
 // #define SAMPLE_TEXTURE2D_ARRAY_LOD(textureName, samplerName, coord2, index, lod)         textureName.SampleLevel(samplerName, float3(coord2, index), lod)
 // #define SAMPLE_TEXTURE2D_ARRAY_BIAS(textureName, samplerName, coord2, index, bias)       textureName.SampleBias(samplerName, float3(coord2, index), bias)
 // #define SAMPLE_TEXTURE2D_ARRAY_GRAD(textureName, samplerName, coord2, index, dpdx, dpdy) textureName.SampleGrad(samplerName, float3(coord2, index), dpdx, dpdy)
-// #define SAMPLE_TEXTURECUBE(textureName, samplerName, coord3)                             textureName.Sample(samplerName, coord3)
+#define SAMPLE_TEXTURECUBE(textureName, samplerName, coord3)                             textureName.Sample(samplerName, coord3)
 // #define SAMPLE_TEXTURECUBE_LOD(textureName, samplerName, coord3, lod)                    textureName.SampleLevel(samplerName, coord3, lod)
 // #define SAMPLE_TEXTURECUBE_BIAS(textureName, samplerName, coord3, bias)                  textureName.SampleBias(samplerName, coord3, bias)
 // #define SAMPLE_TEXTURECUBE_ARRAY(textureName, samplerName, coord3, index)                textureName.Sample(samplerName, float4(coord3, index))

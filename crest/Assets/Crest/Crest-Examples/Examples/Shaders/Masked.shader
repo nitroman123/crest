@@ -44,7 +44,7 @@ Shader "Crest/Examples/Masked"
 #endif
 #endif // _MASK
 
-		sampler2D _Albedo;
+		UNITY_DECLARE_TEX2D(_Albedo);
 		fixed4 _Color;
 		half _Cutoff;
 
@@ -100,16 +100,23 @@ Shader "Crest/Examples/Masked"
 
 			#include "UnityCG.cginc"
 
+			#include "../../../Crest/Shaders/Helpers/BIRP/Core.hlsl"
+
 			struct Varyings
 			{
 				V2F_SHADOW_CASTER;
 				float2 uv : TEXCOORD0;
 				float4 screenPos : TEXCOORD1;
+				UNITY_VERTEX_OUTPUT_STEREO
 			};
 
 			Varyings vert(appdata_base v)
 			{
 				Varyings output;
+				ZERO_INITIALIZE(Varyings, output);
+				UNITY_SETUP_INSTANCE_ID(v);
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+
 				TRANSFER_SHADOW_CASTER_NORMALOFFSET(output)
 				output.screenPos = ComputeScreenPos(output.pos);
 				output.uv = v.texcoord.xy;
@@ -118,6 +125,9 @@ Shader "Crest/Examples/Masked"
 
 			float4 frag(Varyings input) : SV_Target
 			{
+				// We need this when sampling a screenspace texture.
+				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
 #ifndef _MASK_NONE
 #ifndef _SHADOW_PASS
 				if (Clip(input.screenPos))
@@ -127,7 +137,7 @@ Shader "Crest/Examples/Masked"
 #endif // !_SHADOWS
 #endif // _MASKED_ON
 
-				fixed4 c = tex2D(_Albedo, input.uv) * _Color;
+				fixed4 c = UNITY_SAMPLE_TEX2D(_Albedo, input.uv) * _Color;
 				clip(c.a - _Cutoff);
 				SHADOW_CASTER_FRAGMENT(i)
 			}
@@ -162,13 +172,13 @@ Shader "Crest/Examples/Masked"
 			else
 #endif
 			{
-				fixed4 c = tex2D(_Albedo, input.uv_Albedo) * _Color;
+				fixed4 c = UNITY_SAMPLE_TEX2D(_Albedo, input.uv_Albedo) * _Color;
 				clip(c.a - _Cutoff);
 				output.Albedo = c.rgb;
 				output.Metallic = _Metallic;
 				output.Smoothness = _Smoothness;
 #if _EMISSION_ON
-				output.Emission = c.rgb * tex2D(_Albedo, input.uv_Albedo).a * _EmissionColor;
+				output.Emission = c.rgb * UNITY_SAMPLE_TEX2D(_Albedo, input.uv_Albedo).a * _EmissionColor;
 #endif
 				output.Alpha = c.a;
 			}

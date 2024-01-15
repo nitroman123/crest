@@ -13,6 +13,410 @@ Release Notes
 |version|
 ---------
 
+Changed
+^^^^^^^
+.. bullet_list::
+
+   -  Add Unity 2023.1 support.
+   -  Add *Wave Resolution Multiplier* to *Animated Waves* settings which improves wave quality at high resolutions (eg 768 *LOD Data Resolution* with *Wave Resolution Multiplier* of 2).
+   -  Add *Filter Waves* parameter to foam settings to filter lower wavelengths from foam contribution which can help with too much foam underneath camera.
+      Used in the *Main* example scene.
+   -  Remove validation warnings for multiple *Rigidbody* components found in children of floating objects (eg *Boat Probes*).
+
+   .. only:: hdrp or urp
+
+      -  Remove unused files. `[HDRP] [URP]`
+
+
+Fixed
+^^^^^
+.. bullet_list::
+
+   -  Silence several obsolete warnings for Unity 2023.1.
+   -  Fix non ping-pong combine pass (compute) for iOS and possibly other platforms.
+   -  Fix *Shape Gerstner* for iOS and possibly other platforms.
+   -  Fix clip surface affecting extents causing popping.
+   -  Fix clip surface inputs getting stuck near the edge of the last LOD.
+   -  Fix shader compiler errors for consoles.
+   -  Fix *Dynamic Waves* reflected waves added at LOD boundaries on camera movement.
+      Reverts *"Better utilise Dynamic Waves data textures by removing soft border"*.
+   -  Fix exceptions/crash in headless/server environment.
+   -  Fix *"#ifdef UNITY_EDITOR … serialized properties"* warning in standalone.
+
+   .. only:: urp
+
+      -  Fix broken rendering and errors spamming console caused by Unity bug on macOS in sample scenes. `[URP]`
+
+
+Performance
+^^^^^^^^^^^
+.. bullet_list::
+
+   -  Use optimized FindObject(s) methods.
+
+
+.. Trim the history for PDFs.
+.. only:: latex
+
+   | Full version history has been omitted for brevity. It can be found at :link:`Release Notes <{DocLinkBase}/about/history.html>`.
+
+.. raw:: latex
+
+   \iffalse
+
+
+4.18
+----
+
+Breaking
+^^^^^^^^
+.. bullet_list::
+
+   -  Add *Crest.Examples* namespace to all example scripts.
+
+
+Changed
+^^^^^^^
+.. bullet_list::
+
+   -  Better utilise *Dynamic Waves* data textures by removing soft border.
+   -  Add *Terrain Pixel Error Override* to *Ocean Depth Cache*.
+
+   .. only:: birp or urp
+
+      -  Add *ReflectionCamera* script property to *OceanPlanarReflections* for those who need a reference. `[BIRP] [URP]`
+      -  Disable water mesh for *Ocean Planar Reflections* preventing possible user error of including water in reflections leading to intersections. `[BIRP] [URP]`
+
+
+Fixed
+^^^^^
+.. bullet_list::
+
+   -  Fix *ShapeFFT* memory leak when using the default spectrum (no spectrum set to property).
+   -  Fix script compilation error when Unity's input system is enabled but the package is not installed.
+   -  Fix *Dynamic Waves* streaking on camera movement.
+   -  Fix terrains having low precision in *Ocean Depth Cache* in 2022.2+.
+
+   .. only:: hdrp
+
+      -  Fix *Underwater Renderer* not working if enabled after the *Ocean Renderer* or the *Ocean Renderer* was disabled/enabled. `[HDRP]`
+      - Fix underwater surface appearance not having correct reflection coefficient. `[HDRP]`
+
+   .. only:: urp
+
+      -  Fix reflections for Forward+. `[URP]`
+      -  Fix shader warnings on build when using Forward+ by disabling additional lights (unsupported). `[URP]`
+
+   .. only:: birp or urp
+
+      -  Fix some properties on *Ocean Planar Reflections* not updating after being changed. `[BIRP] [URP]`
+
+   .. only:: hdrp or urp
+
+      -  Fix lens flare appearing in scene view in sample scenes. `[HDRP] [URP]`
+
+
+Performance
+^^^^^^^^^^^
+.. bullet_list::
+
+   -  Minor CPU performance improvements.
+
+   .. only:: birp or urp
+
+      -  Disable water mesh for planar reflections camera skipping culling entirely. `[BIRP] [URP]`
+
+   .. only:: hdrp
+
+      -  Skip sampling normal maps if *Normals Strength* is zero. `[HDRP]`
+
+
+4.17.3
+------
+
+Fixed
+^^^^^
+.. bullet_list::
+
+   -  Fix *OnEnable* being triggered twice for *Crest* components in play mode in the editor when *Scene Reload* is enabled.
+      This potentially caused problems with some components.
+
+   .. only:: hdrp
+
+      -  Fix certain components like *Underwater Renderer* and *Ocean Depth Cache* not working in play mode (2021.2+ only). `[HDRP]`
+      -  Fix *Underwater Renderer* not working after *Ocean Renderer* is disabled and then enabled (2021.2+ only). `[HDRP]`
+      -  Fix *Shadow Simulation* not working after *Ocean Renderer* is disabled and then enabled (2021.2+ only). `[HDRP]`
+
+
+4.17.2
+------
+
+Fixed
+^^^^^
+
+-  Fix *Underwater Renderer* breaking in editor randomly.
+
+
+.. only:: hdrp
+
+   4.17.1 `[HDRP]`
+   ---------------
+
+   Fixed
+   ^^^^^
+
+   -  Fix "Unknown Error" shader compilation error. `[HDRP]`
+   -  Fix black edge where water intersects surface in Examples scene. `[HDRP]`
+
+
+4.17
+----
+
+Changed
+^^^^^^^
+.. bullet_list::
+
+   -  Reorganise documentation to make things easier to find.
+   -  Reduce *Water Body* material override feature leaking outside of water bodies.
+   -  No longer execute when editor is inactive (ie out of focus) to prevent edge cases where memory leaks can occur and to save energy.
+   -  Improve *Water Body* gizmo by adding a wireframe.
+   -  Use *Register Height Input* in *Boat* scene instead of *Register Animated Waves Input*.
+   -  Rate limit shadow simulation to *Ocean Renderer > Editor Mode FPS*.
+   -  Move *Ocean Renderer* debug options into foldout.
+   -  Release *Ocean Renderer* resources in *OnDestroy* instead of *OnDisable* to prevent performance penality of rebuilding the system.
+      The option *Debug > Destroy Resources In On Disable* will revert this behaviour if needed.
+   -  Make *Ocean Depth Cache* depth relative.
+      This benefits baked depth caches by allowing them to be moved after baking providing the contents are moved with it.
+   -  Add *Update Saved Cache File* button to *Ocean Depth Cache*.
+   -  Automatically set *Ocean Depth Cache* to *Baked* and set texture after baking.
+   -  Show `Crest` version on *Ocean Renderer*.
+   -  Add helpbox to *Floating Origin* directing users to documentation for solving potential popping issues.
+   -  Improve spacing for spectrum power slider labels.
+
+   .. only:: birp or urp
+
+      -  Ramp planar reflection distortion with distance using the new *Planar Reflections Distortion Distance Factor* material property. `[BIRP] [URP]`
+
+
+Fixed
+^^^^^
+.. bullet_list::
+
+   -  Reduce `GC` allocations when using *ShapeFFT* or *ShapeGerstner*.
+      To not have per frame `GC` allocations, ensure *Spectrum Fixed At Runtime* is enabled.
+   -  Remove or reduce several runtime `GC` allocations.
+   -  Remove several editor `GC` allocations.
+   -  Fix culling and performance issues in edit mode when using RegisterHeightInput, RegisterAnimWavesInput or Whirlpool.
+   -  Fix gizmos not drawing for inputs when using an attached renderer.
+   -  Fix potential cases where water tiles were being culled incorrectly.
+   -  Fix *Sphere Water Interaction* not working in builds.
+   -  Fix larger waves not blending out when using wave blending.
+
+   .. only:: birp
+
+      -  Fix "shader_feature keyword '\\' is not started with a letter or underscore, ignoring the whole line." shader compilation warning. `[BIRP]`
+      -  Actually fix "shadow simulation executing for all cameras". `[BIRP]`
+      -  Fix scene camera "CopyTexture" errors and warnings when using PPv2 with *Underwater Renderer*.
+
+   .. only:: hdrp
+
+      -  Fix *Scatter Colour Shadow* only having a minimal effect and/or causing an outline in shadowed areas. `[HDRP]`
+      -  Fix motion vectors popping when camera height changes. `[HDRP]`
+      -  Fix motion vectors popping on first frame. `[HDRP]`
+      -  Fix *Ocean* *Shader Graph* features (eg shadows) from jittering on camera move for Unity 2021.2+. `[HDRP]`
+
+   .. only:: urp
+
+      -  Fix *Underwater Renderer* compatibility with depth prepass. `[URP]`
+      -  Fix *Underwater Renderer* not working with multiple cameras in certain cases. `[URP]`
+      -  Fix rendering artifacts when *Windows Graphics API* is set to *Direct3D11* and the *Android Graphics API* is set to *Vulkan*. `[URP]`
+      -  Fix *Ocean Planar Reflections* capturing reflections from only one viewpoint when used with multiple cameras in builds. `[URP]`
+      -  Fix shadow simulation breaking cameras that use *StereoTargetEyeMask* when XR `SPI` is enabled. `[URP]`
+      -  Check correct `URP` asset when doing validation to prevent possible exceptions or erroneous validation. `[URP]`
+
+   .. only:: hdrp or urp
+
+      -  Fix shader compilation errors from `BIRP` shaders being previously included in package. `[HDRP] [URP]`
+
+   .. only:: birp or urp
+
+      -  Fix Ocean material texture properties not binding on some platforms (PS5). `[BIRP] [URP]`
+
+
+Performance
+^^^^^^^^^^^
+.. bullet_list::
+
+   -  Improve water tile culling significantly.
+      The bounds for each tile are normally expanded to accommodate mesh displacement (to prevent culling), but they were much larger than required in many cases leading to reduced culling hits which is no longer the case.
+   -  Reduce the amount of displacement queries LOD inputs make significantly making performance more scalable.
+   -  Optimise LOD inputs cost per frame when used with a *Renderer*.
+   -  Minor performance optimisations.
+
+
+4.16
+----
+
+Breaking
+^^^^^^^^
+.. bullet_list::
+
+   -  Set minimum Unity version to 2020.3.40.
+
+   .. only:: hdrp or urp
+
+      -  Set minimum render pipeline package version to 10.10. `[HDRP] [URP]`
+
+
+Changed
+^^^^^^^
+.. bullet_list::
+
+   -  Add support for multiple cameras to the *Underwater Renderer*.
+      One limitation is that underwater culling will be disabled when using multiple *Underwater Renderer*\ s.
+   -  ShapeFFT/Gerstner can now take a mesh renderer as an input.
+   -  Add *Crest/Inputs/Shape Waves/Sample Spectrum* shader which samples the spectrum using a texture.
+   -  Ocean inputs provided via the *Register* components now sort on sibling index in addition to queue, so multiple inputs with the same queue can be organised in the hierarchy to control sort order.
+   -  Add ability to alpha blend waves (effectively an override) instead of only having additive blend waves.
+      Set *Blend Mode* to *Alpha Blend* on the *ShapeFFT* or *ShapeGerstner* to use.
+      It's useful for preventing rivers and lakes from receiving ocean waves.
+   -  Add *Water Tile Prefab* field to *Ocean Renderer* to provide more control over water tile mesh renderers like reflection probes settings.
+   -  Warn users that edits in prefab mode will not be reflected in scene view until prefab is saved.
+   -  Validate that no scale can be applied to the *OceanRenderer*.
+   -  Viewpoint validation has been removed as it was unnecessary and spammed the logs.
+   -  Whirlpool now executes in edit mode.
+   -  *Visualise Ray Trace* now executes in edit mode.
+   -  *Render Alpha On Surface* now executes in edit mode.
+   -  Only report no Shape component validation as help boxes (ie no more console logs).
+   -  Remove outdated lighting validation.
+   -  Validate layers to warn users of potential build failures if `Crest` related renderers are not on the same layer as the *OceanRenderer.Layer*.
+   -  No longer log info level validation to the console.
+   -  Add info validation for tips on using reflection probes when found in a scene.
+   -  Set *Ocean Renderer* *Wind Speed* default value to the maxmimum to reduce UX friction for new users.
+   -  Also search *Addressables* and *Resources* for ocean materials when stripping keywords from underwater shader.
+   -  Add *Ocean Renderer > Extents Size Multiplier* to adjust the extents so they can be increased in size to meet the horizon in cases where they do not.
+   -  Greatly improve performance when many SphereWaterInteraction components are used by utilising GPU Instancing.
+   -  Improve example scenes.
+
+   .. only:: urp
+
+      -  Improve *Ocean Depth Cache* capture performance by excluding all render features. `[URP]`
+
+
+Fixed
+^^^^^
+.. bullet_list::
+
+   -  Fix FFTs incorrectly adding extra foam.
+   -  Limit minimum phase period of flow technique applied to waves to fix objectionable phasing issues in flowing water like rivers.
+   -  Fix some components breaking in edit mode after entering/exiting prefab mode.
+   -  Fix *Build Processor* deprecated/obsolete warnings.
+   -  Fix spurious "headless/batch mode" error during builds.
+   -  Greatly improve spline performance in the editor.
+   -  Fix PSSL compiler errors.
+   -  Fix incompatibility with EasySave3 and similar assets where water tiles would be orphaned when exiting play mode.
+   -  Fix ocean tiles being pickable in the editor.
+   -  Fix several memory leaks.
+   -  Fix *Sea Floor Depth Data* disabled state as it was still attenuating waves when disabled.
+   -  No longer execute when building which caused several issues.
+   -  Fix self-intersecting polygon (and warning) on Ferry model.
+   -  Fix *Examples* scene UI not scaling and thus looking incorrect for non 4K resolution.
+   -  Fix build failure for *main* scene if reflection probe is added that excluded the *Water* layer.
+   -  Prevent bad values (NaN etc) from propagating in the *Dynamic Waves* simulation.
+      This manifested as the water surface disappearing from a singlar point.
+   -  Fix shader include path error when moving `Crest` folder from the standard location.
+   -  No longer disable the *Underwater Renderer* if it fails validation.
+
+   .. only:: birp or urp
+
+      -  Fix *Underwater Curtain* lighting not matching the water surface causing a visible seam at the far plane. `[BIRP] [URP]`
+      -  Fix "mismatching output texture dimension" error when using XR `SPI`. `[BIRP] [URP]`
+
+   .. only:: birp
+
+      -  Fix caustics not rendering in XR `SPI` when shadow simulation is disabled. `[BIRP]`
+      -  Fix XR spectator camera breaking if shadow simulation enabled. `[BIRP]`
+      -  Fix shadow simulation executing for all cameras which could cause incorrect shadows. `[BIRP]`
+      -  Fix underwater effect not rendering properly if spectator camera is used with XR `SPI`. `[BIRP]`
+
+   .. only:: hdrp
+
+      -  Fix ocean moving in edit mode when *Always Refresh* is disabled. `[HDRP]`
+      -  Fix ocean not rendering if no active *Underwater Renderer* is present. `[HDRP]`
+      -  Fix *Clip Surface* adding negative alpha values when *Alpha Clipping* is disabled on the ocean material. `[HDRP]`
+      -  Fix *Sort Priority* on the ocean material not having an effect. `[HDRP]`
+      -  Improve performance by removing duplicated pass when using shadow simulation. `[HDRP]`
+      -  Improve XR `MP` performance by removing shadow copy pass from the right eye. `[HDRP]`
+      -  Fix Unity 2022.2 shader compilation errors. `[HDRP]`
+      -  Fix Unity 2023.1 script compilation errors. `[HDRP]`
+
+   .. only:: urp
+
+      -  Fix *Underwater Renderer* incompatibility with `SSAO`. `[URP]`
+      -  Fix Unity 2022.2 obsolete warnings. `[URP]`
+
+
+.. only:: latex
+
+   \
+
+   .. attention::
+
+      The history has been trimmed but the :link:`full history <{DocLinkBase}/about/history.html>` can be viewed online.
+
+
+4.15.2
+------
+
+Changed
+^^^^^^^
+.. bullet_list::
+
+   -  Default FFT resolution increased to match quality standards.
+   -  FFT samples-per-wave now scales proportionally to FFT resolution, meaning overall quality scales gracefully with the resolution setting.
+   -  Re-enable height queries in edit-mode which allows several height based components to work in edit-mode.
+      They can still be disabled with the new *Height Queries* toggle on the *Ocean Renderer*.
+
+
+Fixed
+^^^^^
+.. bullet_list::
+
+   -  Provide feedback on how to solve errors from *Sphere-Water Interaction* moving file locations.
+   -  Fix *Underwater Renderer* stereo rendering not working in builds for Unity 2021.2.
+   -  Fix *Underwater Renderer* stereo rendering issue where both eyes are same for color and/or depth with certain features enabled.
+   -  Fix stereo rendering for *Examples* scene.
+   -  Fix many memory/reference leaks.
+   -  Fix excessively long build times when no *Underwater Renderer* is present in scene.
+   -  Fix *Underwater Renderer* not working with varying water level.
+   -  Fix jagged shoreline foam when using baked *Sea Floor Depth* cache.
+
+   .. only:: birp
+
+      -  Fix color being incorrect for *Underwater Shader API*. `[BIRP]`
+
+   .. only:: hdrp
+
+      -  Fix ocean not rendering in builds for Unity 2021.2 if no *Underwater Renderer* is present. `[HDRP]`
+
+   .. only:: urp
+
+      -  Disable `SSAO` for *Examples* scene and warn users of incompatibility with *Portals and Volumes* feature. `[URP]`
+
+
+4.15.1
+------
+
+Fixed
+^^^^^
+.. bullet_list::
+
+   -  Fix shader compiler error.
+
+
+4.15
+----
+
 Breaking
 ^^^^^^^^
 .. bullet_list::
@@ -65,6 +469,7 @@ Changed
    -  Add new example scene *BoatWakes* to showcase improvements to *SphereWaterInteraction* component.
    -  Allow scaling FFT waves on spline (not supported previously). *SplinePointDataGerstner* has been renamed to *SplinePointDataWaves* which works for both *ShapeFFT* and *ShapeGerstner*.
    -  Add *Surface Self-Intersection Fix Mode* (advanced option) to control how self-intersections of the ocean surface caused by intense/choppy waves are handled.
+   -  Add *Maximum Buoyancy Force* for preventing objects from having too much force being applied when fully submerged.
    -  Updated all example scenes.
 
    .. only:: hdrp
@@ -149,11 +554,11 @@ Fixed
       -  Fix foam bubbles parallax effect using the incorrect normal space. `[HDRP]`
       -  Fix foam bubbles texture scaling. `[HDRP]`
 
-Performance
-^^^^^^^^^^^
-.. bullet_list::
+.. only:: hdrp
 
-   .. only:: hdrp
+   Performance
+   ^^^^^^^^^^^
+   .. bullet_list::
 
       -  Reduce cost of populating the ocean depth cache. `[HDRP]`
 
@@ -982,7 +1387,6 @@ Fixed
 
    -  First release!
 
-
 .. only:: urp
 
    3.8 `[URP]`
@@ -1105,3 +1509,13 @@ Fixed
    ^^^^^
    -  Made more robust against VR screen depth bug, resolves odd shapes appearing on surface
    -  :issue:`279`
+
+
+   .. raw:: latex
+
+      \fi
+
+
+.. raw:: latex
+
+   \fi

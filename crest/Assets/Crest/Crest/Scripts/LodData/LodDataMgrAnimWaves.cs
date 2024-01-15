@@ -61,6 +61,7 @@ namespace Crest
         readonly int sp_LD_TexArray_AnimatedWaves_Compute = Shader.PropertyToID("_LD_TexArray_AnimatedWaves_Compute");
         readonly int sp_LD_TexArray_WaveBuffer = Shader.PropertyToID("_LD_TexArray_WaveBuffer");
         public static readonly int sp_AttenuationInShallows = Shader.PropertyToID("_AttenuationInShallows");
+        public static readonly int sp_CombineBuffer = Shader.PropertyToID("_CombineBuffer");
         const string s_textureArrayName = "_LD_TexArray_AnimatedWaves";
 
         public interface IShapeUpdatable { void CrestUpdate(CommandBuffer buf); }
@@ -78,6 +79,20 @@ namespace Crest
             _bufferCount = Helpers.IsMotionVectorsEnabled() ? 2 : 1;
 
             Start();
+        }
+
+        internal override void OnDisable()
+        {
+            base.OnDisable();
+            _waveBuffers.Release();
+            Helpers.Destroy(_waveBuffers);
+            _combineBuffer.Release();
+            Helpers.Destroy(_combineBuffer);
+
+            for (int index = 0; index < _combineMaterial.Length; index++)
+            {
+                Helpers.Destroy(_combineMaterial[index].material);
+            }
         }
 
         protected override void InitData()
@@ -109,6 +124,7 @@ namespace Crest
                 {
                     var mat = new Material(combineShaderGraphics);
                     _combineMaterial[i] = new PropertyWrapperMaterial(mat);
+                    _combineMaterial[i].SetInt(sp_LD_SliceIndex, i);
                 }
             }
 
@@ -138,7 +154,7 @@ namespace Crest
             result.filterMode = FilterMode.Bilinear;
             result.anisoLevel = 0;
             result.useMipMap = false;
-            result.name = "CombineBuffer";
+            result.name = "CrestCombineBuffer";
             result.dimension = TextureDimension.Tex2D;
             result.volumeDepth = 1;
             result.enableRandomWrite = false;
@@ -155,10 +171,11 @@ namespace Crest
             public int _lodCount;
             public float _globalMaxWavelength;
 
-            public float Filter(ILodDataInput data, out int isTransition)
+            public float Filter(ILodDataInput data, out int isTransition, out float alpha)
             {
                 var drawOctaveWavelength = data.Wavelength;
                 isTransition = 0;
+                alpha = 1f;
 
                 // No wavelength preference - don't draw per-lod
                 if (drawOctaveWavelength == 0f)
@@ -178,12 +195,14 @@ namespace Crest
                     if (_lodIdx == _lodCount - 2)
                     {
                         isTransition = 1;
-                        return 1f - OceanRenderer.Instance.ViewerAltitudeLevelAlpha;
+                        alpha = 1f - OceanRenderer.Instance.ViewerAltitudeLevelAlpha;
+                        return 1f;
                     }
 
                     if (_lodIdx == _lodCount - 1)
                     {
-                        return OceanRenderer.Instance.ViewerAltitudeLevelAlpha;
+                        alpha = OceanRenderer.Instance.ViewerAltitudeLevelAlpha;
+                        return 1f;
                     }
                 }
                 else if (drawOctaveWavelength < _lodMaxWavelength)
@@ -199,9 +218,10 @@ namespace Crest
 
         public class FilterNoLodPreference : IDrawFilter
         {
-            public float Filter(ILodDataInput data, out int isTransition)
+            public float Filter(ILodDataInput data, out int isTransition, out float alpha)
             {
                 isTransition = 0;
+                alpha = 1f;
                 return data.Wavelength == 0f ? 1f : 0f;
             }
         }
@@ -232,6 +252,7 @@ namespace Crest
             {
                 buf.SetRenderTarget(_waveBuffers, 0, CubemapFace.Unknown, lodIdx);
                 buf.ClearRenderTarget(false, true, new Color(0f, 0f, 0f, 0f));
+                buf.SetGlobalInt(sp_LD_SliceIndex, lodIdx);
 
                 // draw any data with lod preference
                 _filterWavelength._lodIdx = lodIdx;
@@ -255,6 +276,7 @@ namespace Crest
             for (int lodIdx = lodCount - 1; lodIdx >= 0; lodIdx--)
             {
                 buf.SetRenderTarget(_targets.Current, 0, CubemapFace.Unknown, lodIdx);
+                buf.SetGlobalInt(sp_LD_SliceIndex, lodIdx);
 
                 // draw any data that did not express a preference for one lod or another
                 SubmitDrawsFiltered(lodIdx, buf, _filterNoLodPreference);
@@ -281,6 +303,11 @@ namespace Crest
                 // The per-octave wave buffers
                 BindWaveBuffer(_combineMaterial[lodIdx]);
 
+#if UNITY_EDITOR
+                // On recompiles this becomes unset even though we run over the code path to set it again...
+                _combineMaterial[lodIdx].SetInt(sp_LD_SliceIndex, lodIdx);
+#endif
+
                 // Bind this LOD data (displacements). Option to disable the combine pass - very useful debugging feature.
                 if (_shapeCombinePass)
                 {
@@ -297,8 +324,6 @@ namespace Crest
                     OceanRenderer.Instance._lodDataDynWaves.BindCopySettings(_combineMaterial[lodIdx]);
                 }
 
-                _combineMaterial[lodIdx].SetInt(sp_LD_SliceIndex, lodIdx);
-
                 _combineMaterial[lodIdx].SetBuffer(OceanRenderer.sp_cascadeData, OceanRenderer.Instance._bufCascadeDataTgt);
                 _combineMaterial[lodIdx].SetBuffer(OceanRenderer.sp_perCascadeInstanceData, OceanRenderer.Instance._bufPerCascadeInstanceData);
 
@@ -308,7 +333,7 @@ namespace Crest
 
                 // Copy combine buffer back to lod texture array
                 buf.SetRenderTarget(_targets.Current, 0, CubemapFace.Unknown, lodIdx);
-                _combineMaterial[lodIdx].SetTexture(Shader.PropertyToID("_CombineBuffer"), _combineBuffer);
+                _combineMaterial[lodIdx].SetTexture(sp_CombineBuffer, _combineBuffer);
                 buf.DrawProcedural(Matrix4x4.identity, _combineMaterial[lodIdx].material, shaderPassCopyResultBack, MeshTopology.Triangles, 3);
             }
         }
